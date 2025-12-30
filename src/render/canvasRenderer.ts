@@ -19,6 +19,8 @@ export class CanvasRenderer {
   private tileImages: Map<FieldType, HTMLImageElement>;
   private tileImagesLoaded: boolean;
 
+  private invalidateHandler: (() => void) | null;
+
 
   constructor(private canvas: HTMLCanvasElement, size: number = 38) {
     const ctx = canvas.getContext("2d");
@@ -36,7 +38,7 @@ export class CanvasRenderer {
 
     this.tileImages = new Map<FieldType, HTMLImageElement>();
     this.tileImagesLoaded = false;
-
+    this.invalidateHandler = null;
     this.loadTileImages();
   }
 
@@ -259,13 +261,26 @@ export class CanvasRenderer {
     this.addTileImage(FieldType.Industry, "/tiles/industry.png");
   }
 
-  // Helper to register an image
   private addTileImage(field: FieldType, url: string): void {
     const img = new Image();
+
+    // When the image finishes loading, request a redraw
+    img.onload = this.handleAssetLoaded.bind(this);
+    img.onerror = this.handleAssetLoaded.bind(this);
+
     img.src = url;
     this.tileImages.set(field, img);
+  }
 
-    // Note: we don't block on loading; renderer will fall back if not ready
+  private handleAssetLoaded(): void {
+    if (this.invalidateHandler) {
+      this.invalidateHandler();
+    }
+  }
+
+
+  public setInvalidateHandler(handler: (() => void) | null): void {
+    this.invalidateHandler = handler;
   }
 
 }
