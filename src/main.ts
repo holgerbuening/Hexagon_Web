@@ -17,6 +17,11 @@ const hudZoom = document.getElementById("hudZoom") as HTMLSpanElement;
 
 // Render once initially
 resizeCanvasToDisplaySize(canvas);
+const centerTile = game.tryGetMapCenterTile();
+renderer.resetView();
+if (centerTile) {
+  renderer.centerOnAxial(centerTile.q, centerTile.r);
+}
 renderAll();
 
 // --- Mouse interaction state ---
@@ -147,7 +152,8 @@ function updateHud(): void {
   hudPlayer.textContent = String(state.currentPlayer);
 
   if (state.selectedHex) {
-    hudSelected.textContent = `q=${state.selectedHex.q}, r=${state.selectedHex.r}`;
+    const tile = game.getTile(state.selectedHex);
+    hudSelected.textContent = `q=${state.selectedHex.q}, r=${state.selectedHex.r}, col=${tile?.col}, row=${tile?.row}`;
   } else {
     hudSelected.textContent = "-";
   }
@@ -193,6 +199,10 @@ window.addEventListener("keydown", function (ev) {
   // Reset view
   if (ev.code === "Digit0" || ev.code === "Numpad0") {
     renderer.resetView();
+    const centerTile = game.tryGetMapCenterTile();
+    if (centerTile) {
+      renderer.centerOnAxial(centerTile.q, centerTile.r);
+    }
     renderAll();
     return;
   }

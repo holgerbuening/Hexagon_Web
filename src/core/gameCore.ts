@@ -7,6 +7,7 @@ export class GameCore {
   private tileGrid: HexTile[][]; // 2D array for easy access
 
   constructor(width: number, height: number) {
+    this.tileGrid = [];
     this.state = {
       turn: 1,
       currentPlayer: 0,
@@ -17,7 +18,7 @@ export class GameCore {
       tiles: this.createBaseMap(width, height),
       units: this.createTestUnits(),
     };
-    this.tileGrid = [];
+    
     this.createRandomMap(width, height);
   }
 
@@ -53,7 +54,7 @@ export class GameCore {
     }
   }
 
-  private getTile(pos: Axial): HexTile | undefined {
+  public getTile(pos: Axial): HexTile | undefined {
     for (const tile of this.state.tiles) {
         if (tile.q === pos.q && tile.r === pos.r) {
         return tile;
@@ -321,6 +322,42 @@ private growArea(
   }
   return qOffset;
   }
+
+  public tryGetMapCenterTile(): HexTile | undefined {
+    const width = this.state.mapWidth;
+    const height = this.state.mapHeight;
+
+    const centerCol = Math.floor(width / 2);
+    const centerRow = Math.floor(height / 2);
+
+    const tile = this.getTileByColRow(centerCol, centerRow);
+    if (tile) {
+      return tile;
+    }
+
+    // Fallback: return first tile if available
+    if (this.state.tiles.length > 0) {
+      return this.state.tiles[0];
+    }
+
+    return undefined;
+  }
+
+  public getTileByColRow(col: number, row: number): HexTile | undefined {
+    if (row < 0 || row >= this.state.mapHeight) {
+      return undefined;
+    }
+    if (col < 0 || col >= this.state.mapWidth) {
+      return undefined;
+    }
+    const rowArray = this.tileGrid[row];
+    console.log('this.tileGrid[row]:', this.tileGrid[row]);
+    if (!rowArray) {
+      return undefined;
+    }
+    return rowArray[col];
+}
+
 
   
 }

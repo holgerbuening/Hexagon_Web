@@ -250,6 +250,15 @@ export class CanvasRenderer {
     const centerY = this.canvas.height / 2;
     this.zoomAtScreenPoint(centerX, centerY, zoomFactor);
   }
+
+  public centerOnAxial(q: number, r: number): void {
+    const p = axialToPixel(q, r, this.size);
+
+    // We want this world position to end up at the screen center
+    this.panX = -p.x*this.zoom;
+    this.panY = -p.y*this.zoom;
+  }
+
   // Load tile images from /public
   private loadTileImages(): void {
     this.addTileImage(FieldType.Farmland, "/tiles/farmland.png");
@@ -277,7 +286,6 @@ export class CanvasRenderer {
       this.invalidateHandler();
     }
   }
-
 
   public setInvalidateHandler(handler: (() => void) | null): void {
     this.invalidateHandler = handler;
