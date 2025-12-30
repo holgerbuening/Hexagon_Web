@@ -5,8 +5,15 @@ import { axialToPixel } from "../core/hexMath";
 export class CanvasRenderer {
   private ctx: CanvasRenderingContext2D;
   private size: number;
-  private originX: number;
-  private originY: number;
+
+  // Camera / view transform
+  private panX: number;
+  private panY: number;
+  private zoom: number;
+
+  // Limits
+  private minZoom: number;
+  private maxZoom: number;
 
   constructor(private canvas: HTMLCanvasElement, size: number = 38) {
     const ctx = canvas.getContext("2d");
@@ -14,13 +21,19 @@ export class CanvasRenderer {
     this.ctx = ctx;
     this.size = size;
 
-    // Center the board
-    this.originX = Math.floor(canvas.width / 2);
-    this.originY = Math.floor(canvas.height / 2);
+    // Start centered-ish
+    this.panX = 0;
+    this.panY = 0;
+    this.zoom = 1.0;
+
+    this.minZoom = 0.35;
+    this.maxZoom = 3.0;
   }
 
   render(state: Readonly<GameState>): void {
     this.clear();
+
+    this.applyCameraTransform();
 
     // Draw tiles
     for (const tile of state.tiles) {
@@ -33,32 +46,88 @@ export class CanvasRenderer {
       this.drawUnit(unit);
     }
 
-    // HUD text
-    this.ctx.fillStyle = "black";
-    this.ctx.fillText(`Turn: ${state.turn} | Player: ${state.currentPlayer}`, 10, 20);
-
-    if (state.selectedHex) {
-      this.ctx.fillText(`Selected: q=${state.selectedHex.q}, r=${state.selectedHex.r}`, 10, 40);
-    }
+    // Reset transform for HUD (screen space)
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
-  // Convert world pixel (canvas coords) to board pixel (origin-centered)
-  screenToWorld(x: number, y: number): { x: number; y: number } {
-    return { x: x - this.originX, y: y - this.originY };
+  // Convert screen pixel (canvas coords) to world pixel (board coords, before axial conversion)
+  screenToWorld(screenX: number, screenY: number): { x: number; y: number } {
+    // Screen -> center
+    const cx = screenX - this.canvas.width / 2;
+    const cy = screenY - this.canvas.height / 2;
+
+    // Remove pan, remove zoom
+    const wx = (cx - this.panX) / this.zoom;
+    const wy = (cy - this.panY) / this.zoom;
+
+    return { x: wx, y: wy };
   }
 
   getHexSize(): number {
     return this.size;
   }
 
+  // Pan by delta in screen pixels
+  panBy(dx: number, dy: number): void {
+    this.panX += dx;
+    this.panY += dy;
+  }
+
+  // Zoom around a screen point (mouse position in canvas coords)
+  zoomAtScreenPoint(screenX: number, screenY: number, zoomFactor: number): void {
+    const oldZoom = this.zoom;
+    let newZoom = oldZoom * zoomFactor;
+
+    newZoom = this.clampZoom(newZoom);
+    if (newZoom === oldZoom) {
+      return;
+    }
+
+    // World position under the cursor before zoom
+    const worldBefore = this.screenToWorld(screenX, screenY);
+
+    // Apply new zoom
+    this.zoom = newZoom;
+
+    // World position under cursor after zoom
+    const worldAfter = this.screenToWorld(screenX, screenY);
+
+    // Adjust pan so that the world point stays under the cursor
+    const dxWorld = worldAfter.x - worldBefore.x;
+    const dyWorld = worldAfter.y - worldBefore.y;
+
+    // Convert world delta to screen delta at current zoom
+    this.panX += dxWorld * this.zoom;
+    this.panY += dyWorld * this.zoom;
+  }
+
+  getZoom(): number {
+    return this.zoom;
+  }
+
+  private clampZoom(z: number): number {
+    if (z < this.minZoom) return this.minZoom;
+    if (z > this.maxZoom) return this.maxZoom;
+    return z;
+  }
+
+  private applyCameraTransform(): void {
+    // World origin at canvas center, then pan, then zoom
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.ctx.translate(this.canvas.width / 2, this.canvas.height / 2);
+    this.ctx.translate(this.panX, this.panY);
+    this.ctx.scale(this.zoom, this.zoom);
+  }
+
   private clear(): void {
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
   }
 
   private drawTile(tile: HexTile, selected: boolean): void {
     const p = axialToPixel(tile.q, tile.r, this.size);
-    const cx = p.x + this.originX;
-    const cy = p.y + this.originY;
+    const cx = p.x;
+    const cy = p.y;
 
     // Build hex path
     this.ctx.beginPath();
@@ -80,22 +149,21 @@ export class CanvasRenderer {
 
     // Stroke style depending on selection
     if (selected) {
-      this.ctx.lineWidth = 4;
+      this.ctx.lineWidth = 4 / this.zoom; // keep selection outline visually stable
       this.ctx.strokeStyle = "#ff0000";
     } else {
-      this.ctx.lineWidth = 1;
+      this.ctx.lineWidth = 1 / this.zoom; // stable line width
       this.ctx.strokeStyle = "#333333";
     }
     this.ctx.stroke();
 
-    // Optional: draw axial coords
+    // Optional: draw axial coords (scale text with zoom, but keep readable)
     this.ctx.fillStyle = "#222222";
-    this.ctx.font = "12px sans-serif";
-    this.ctx.fillText(`${tile.q},${tile.r}`, cx - 16, cy + 4);
+    this.ctx.font = `${12 / this.zoom}px sans-serif`;
+    this.ctx.fillText(`${tile.q},${tile.r}`, cx - 16 / this.zoom, cy + 4 / this.zoom);
   }
 
   private getTileFillColor(field: FieldType): string {
-    // Simple colors (replace with sprites later)
     if (field === FieldType.Plains) {
       return "#e8e2b6";
     }
@@ -107,15 +175,14 @@ export class CanvasRenderer {
 
   private drawUnit(unit: Unit): void {
     const p = axialToPixel(unit.pos.q, unit.pos.r, this.size);
-    const cx = p.x + this.originX;
-    const cy = p.y + this.originY;
+    const cx = p.x;
+    const cy = p.y;
 
     // Unit marker
     this.ctx.beginPath();
-    this.ctx.arc(cx, cy, this.size * 0.35, 0, Math.PI * 2);
+    this.ctx.arc(cx, cy, (this.size * 0.35), 0, Math.PI * 2);
     this.ctx.closePath();
 
-    // Unit color per owner
     if (unit.owner === 0) {
       this.ctx.fillStyle = "#2b6cff";
     } else {
@@ -124,10 +191,12 @@ export class CanvasRenderer {
 
     this.ctx.fill();
     this.ctx.strokeStyle = "#111111";
+    this.ctx.lineWidth = 1 / this.zoom;
     this.ctx.stroke();
 
     this.ctx.fillStyle = "white";
-    this.ctx.fillText(String(unit.id), cx - 4, cy + 4);
+    this.ctx.font = `${12 / this.zoom}px sans-serif`;
+    this.ctx.fillText(String(unit.id), cx - 4 / this.zoom, cy + 4 / this.zoom);
   }
 }
 
@@ -137,5 +206,3 @@ function tileMatches(a: Axial | null, b: Axial): boolean {
   }
   return a.q === b.q && a.r === b.r;
 }
-
-

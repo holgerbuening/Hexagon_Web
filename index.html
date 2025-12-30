@@ -3,13 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <title>Hexagon Web</title>
-    <style>
-      body { margin: 0; font-family: sans-serif; }
-      canvas { display: block; margin: 0 auto; }
-    </style>
+    <link rel="stylesheet" href="/src/styles/styles.css" />
   </head>
   <body>
-    <canvas id="game" width="1000" height="700"></canvas>
+    <div id="app">
+      <canvas id="game" width="1000" height="700"></canvas>
+
+      <!-- HUD overlay -->
+      <div id="hud" class="hud">
+        <div><strong>Turn:</strong> <span id="hudTurn">-</span></div>
+        <div><strong>Player:</strong> <span id="hudPlayer">-</span></div>
+        <div><strong>Selected:</strong> <span id="hudSelected">-</span></div>
+        <div><strong>Zoom:</strong> <span id="hudZoom">-</span></div>
+      </div>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

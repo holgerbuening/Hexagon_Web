@@ -1,0 +1,51 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  font-family: sans-serif;
+  background-color: #f0f0f0;
+}
+
+/* App wrapper so overlays work */
+#app {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+}
+
+/* Canvas fills the app container */
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+
+  background-color: #ffffff;
+  user-select: none;
+  cursor: grab;
+}
+
+canvas:active {
+  cursor: grabbing;
+}
+
+
+/* HUD overlay */
+.hud {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+
+  background: rgba(255, 255, 255, 0.90);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
+  padding: 8px 10px;
+
+  font-size: 14px;
+  line-height: 1.35;
+
+  /* Let mouse events go through to canvas */
+  pointer-events: none;
+}
