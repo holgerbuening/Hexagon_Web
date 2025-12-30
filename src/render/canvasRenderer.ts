@@ -2,6 +2,15 @@ import type { Axial, GameState, HexTile, Unit } from "../core/types";
 import { FieldType } from "../core/types";
 import { axialToPixel } from "../core/hexMath";
 
+// Selection styles
+const SELECT_FILL_COLOR = "rgba(0, 200, 0, 0.25)"; // semi-transparent green
+const SELECT_STROKE_COLOR = "rgba(0, 180, 0, 0.9)";
+const SELECT_STROKE_WIDTH = 3;
+
+
+
+
+
 export class CanvasRenderer {
   private ctx: CanvasRenderingContext2D;
   private size: number;
@@ -142,18 +151,7 @@ export class CanvasRenderer {
     const cy = p.y;
 
     // Build hex path
-    this.ctx.beginPath();
-    for (let i = 0; i < 6; i++) {
-      const angle = (Math.PI / 180) * (60 * i - 30);
-      const px = cx + this.size * Math.cos(angle);
-      const py = cy + this.size * Math.sin(angle);
-      if (i === 0) {
-        this.ctx.moveTo(px, py);
-      } else {
-        this.ctx.lineTo(px, py);
-      }
-    }
-    this.ctx.closePath();
+    this.buildHexPath(cx, cy);
 
     // Clip to hex shape, then draw the tile image inside
     this.ctx.save();
@@ -179,13 +177,13 @@ export class CanvasRenderer {
 
     // Stroke style depending on selection
     if (selected) {
-      this.ctx.lineWidth = 4 / this.zoom;
-      this.ctx.strokeStyle = "#ff0000";
+      this.drawSelectedHex(cx, cy);
     } else {
+      this.buildHexPath(cx, cy);
       this.ctx.lineWidth = 1 / this.zoom;
       this.ctx.strokeStyle = "#333333";
+      this.ctx.stroke();
     }
-    this.ctx.stroke();
   }
 
 
@@ -291,6 +289,38 @@ export class CanvasRenderer {
     this.invalidateHandler = handler;
   }
 
+  private buildHexPath(cx: number, cy: number): void {
+    this.ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const angle = (Math.PI / 180) * (60 * i - 30);
+      const px = cx + this.size * Math.cos(angle);
+      const py = cy + this.size * Math.sin(angle);
+      if (i === 0) this.ctx.moveTo(px, py);
+      else this.ctx.lineTo(px, py);
+    }
+    this.ctx.closePath();
+  }
+
+  private drawSelectedHex(cx: number, cy: number): void {
+    // --- Overlay ---
+    this.buildHexPath(cx, cy);
+    this.ctx.shadowColor = "rgba(0, 255, 0, 0.35)";
+    this.ctx.shadowBlur = 10;
+
+
+
+    this.ctx.fillStyle = "rgba(0, 200, 0, 0.52)"; // semi-transparent green
+    this.ctx.fill();
+
+    // --- Border ---
+    this.buildHexPath(cx, cy);
+    this.ctx.lineWidth = 2
+     / this.zoom;
+    this.ctx.strokeStyle = "rgba(0, 180, 0, 0.95)";
+    this.ctx.stroke();
+    this.ctx.shadowBlur = 0;
+  }
+
 }
 
 function tileMatches(a: Axial | null, b: Axial): boolean {
@@ -299,5 +329,4 @@ function tileMatches(a: Axial | null, b: Axial): boolean {
   }
   return a.q === b.q && a.r === b.r;
 }
-
 
