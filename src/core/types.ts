@@ -9,6 +9,8 @@ export interface Axial {
 
 export interface HexTile extends Axial {
   field: FieldType;
+  col: number
+  row: number
 }
 
 export enum FieldType {
@@ -35,4 +37,6 @@ export interface GameState {
   selectedHex: Axial | null;
   tiles: HexTile[];
   units: Unit[];
+  mapWidth: number;
+  mapHeight: number;
 }

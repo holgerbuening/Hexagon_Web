@@ -5,7 +5,7 @@ import { CanvasRenderer } from "./render/canvasRenderer";
 const BASE_HEX_SIZE = 64;
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const renderer = new CanvasRenderer(canvas, BASE_HEX_SIZE);
-const game = new GameCore(4);
+const game = new GameCore(20,20); // 20x20 map
 renderer.setInvalidateHandler(renderAll);
 
 
