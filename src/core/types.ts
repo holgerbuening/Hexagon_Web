@@ -12,9 +12,13 @@ export interface HexTile extends Axial {
 }
 
 export enum FieldType {
-  Plains = "Plains",
-  Forest = "Forest",
+  Woods = "Woods",
+  Ocean = "Ocean",
   Mountain = "Mountain",
+  Farmland = "Farmland",
+  Hills = "Hills",
+  City = "City",
+  Industry = "Industry",
 }
 
 export interface Unit {

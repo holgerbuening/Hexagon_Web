@@ -15,6 +15,11 @@ export class CanvasRenderer {
   private minZoom: number;
   private maxZoom: number;
 
+  // Tile image storage
+  private tileImages: Map<FieldType, HTMLImageElement>;
+  private tileImagesLoaded: boolean;
+
+
   constructor(private canvas: HTMLCanvasElement, size: number = 38) {
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Canvas 2D context not available");
@@ -28,6 +33,11 @@ export class CanvasRenderer {
 
     this.minZoom = 0.35;
     this.maxZoom = 3.0;
+
+    this.tileImages = new Map<FieldType, HTMLImageElement>();
+    this.tileImagesLoaded = false;
+
+    this.loadTileImages();
   }
 
   render(state: Readonly<GameState>): void {
@@ -143,34 +153,63 @@ export class CanvasRenderer {
     }
     this.ctx.closePath();
 
-    // Fill based on field type
-    this.ctx.fillStyle = this.getTileFillColor(tile.field);
-    this.ctx.fill();
+    // Clip to hex shape, then draw the tile image inside
+    this.ctx.save();
+    this.ctx.clip();
+
+    const img = this.tileImages.get(tile.field);
+    if (img && img.complete && img.naturalWidth > 0) {
+      // Draw image centered. Clip will cut it to hex.
+      // You can tweak the scale factor to taste.
+      const scale = 1.15;
+
+      const destH = (2 * this.size) * scale;
+      const destW = destH * (img.naturalWidth / img.naturalHeight);
+
+      this.ctx.drawImage(img, cx - destW / 2, cy - destH / 2, destW, destH);
+    } else {
+      // Fallback color if image not loaded yet
+      this.ctx.fillStyle = this.getTileFillColor(tile.field);
+      this.ctx.fill();
+    }
+
+    this.ctx.restore();
 
     // Stroke style depending on selection
     if (selected) {
-      this.ctx.lineWidth = 4 / this.zoom; // keep selection outline visually stable
+      this.ctx.lineWidth = 4 / this.zoom;
       this.ctx.strokeStyle = "#ff0000";
     } else {
-      this.ctx.lineWidth = 1 / this.zoom; // stable line width
+      this.ctx.lineWidth = 1 / this.zoom;
       this.ctx.strokeStyle = "#333333";
     }
     this.ctx.stroke();
-
-    // Optional: draw axial coords (scale text with zoom, but keep readable)
-    this.ctx.fillStyle = "#222222";
-    this.ctx.font = `${12 / this.zoom}px sans-serif`;
-    this.ctx.fillText(`${tile.q},${tile.r}`, cx - 16 / this.zoom, cy + 4 / this.zoom);
   }
 
+
   private getTileFillColor(field: FieldType): string {
-    if (field === FieldType.Plains) {
+    if (field === FieldType.Farmland) {
       return "#e8e2b6";
     }
-    if (field === FieldType.Forest) {
+    if (field === FieldType.Woods) {
       return "#b6e8b6";
     }
-    return "#d0d0d0";
+    if (field === FieldType.Ocean) {
+      return "#4eb1eaff";
+    }
+    if (field === FieldType.Mountain) {
+      return "#a0a0a0";
+    }
+    if (field === FieldType.Hills) {
+      return "#253921ff";
+    }
+    if (field === FieldType.City) {
+      return "#c0c0c0";
+    }
+    if (field === FieldType.Industry) { 
+      return "#d0d0d0";
+    }
+    return "#cccccc"; // default
   }
 
   private drawUnit(unit: Unit): void {
@@ -208,6 +247,25 @@ export class CanvasRenderer {
     const centerX = this.canvas.width / 2;
     const centerY = this.canvas.height / 2;
     this.zoomAtScreenPoint(centerX, centerY, zoomFactor);
+  }
+  // Load tile images from /public
+  private loadTileImages(): void {
+    this.addTileImage(FieldType.Farmland, "/tiles/farmland.png");
+    this.addTileImage(FieldType.Woods, "/tiles/woods.png");
+    this.addTileImage(FieldType.Ocean, "/tiles/ocean.png");
+    this.addTileImage(FieldType.Mountain, "/tiles/mountain.png");
+    this.addTileImage(FieldType.Hills, "/tiles/hills.png");
+    this.addTileImage(FieldType.City, "/tiles/city.png");
+    this.addTileImage(FieldType.Industry, "/tiles/industry.png");
+  }
+
+  // Helper to register an image
+  private addTileImage(field: FieldType, url: string): void {
+    const img = new Image();
+    img.src = url;
+    this.tileImages.set(field, img);
+
+    // Note: we don't block on loading; renderer will fall back if not ready
   }
 
 }

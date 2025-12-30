@@ -2,8 +2,9 @@ import { GameCore } from "./core/gameCore";
 import { pixelToAxial } from "./core/hexMath";
 import { CanvasRenderer } from "./render/canvasRenderer";
 
+const BASE_HEX_SIZE = 64;
 const canvas = document.getElementById("game") as HTMLCanvasElement;
-const renderer = new CanvasRenderer(canvas, 38);
+const renderer = new CanvasRenderer(canvas, BASE_HEX_SIZE);
 const game = new GameCore(4);
 
 // HUD elements

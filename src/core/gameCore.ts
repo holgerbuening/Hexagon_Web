@@ -79,10 +79,10 @@ export class GameCore {
     const v = (q * 13 + r * 7) % 10;
 
     if (v < 6) {
-      return FieldType.Plains;
+      return FieldType.Farmland;
     }
     if (v < 9) {
-      return FieldType.Forest;
+      return FieldType.Woods;
     }
     return FieldType.Mountain;
   }
