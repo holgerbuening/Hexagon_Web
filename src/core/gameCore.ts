@@ -41,7 +41,7 @@ export class GameCore {
     // Store the position of the selected tile
     this.state.selectedHex = { q: tile.q, r: tile.r };
     const unit = this.getUnitAt(pos);
-    if (unit) {
+    if (unit && unit.owner === this.state.currentPlayer) {
       this.state.selectedUnit = unit;
     } else {
       this.state.selectedUnit = null;
