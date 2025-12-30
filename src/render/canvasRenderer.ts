@@ -1,6 +1,7 @@
-import type { Axial, GameState, HexTile, Unit } from "../core/types";
+import type { Axial, GameState, HexTile } from "../core/types";
 import { FieldType } from "../core/types";
 import { axialToPixel } from "../core/hexMath";
+import type { Unit } from "../core/units/unit";
 
 // Selection styles
 const SELECT_FILL_COLOR = "rgba(0, 200, 0, 0.25)"; // semi-transparent green
@@ -28,6 +29,9 @@ export class CanvasRenderer {
   private tileImages: Map<FieldType, HTMLImageElement>;
   private tileImagesLoaded: boolean;
 
+  // Unit image storage
+  private unitImages: Map<string, HTMLImageElement>;
+
   private invalidateHandler: (() => void) | null;
 
 
@@ -49,6 +53,8 @@ export class CanvasRenderer {
     this.tileImagesLoaded = false;
     this.invalidateHandler = null;
     this.loadTileImages();
+    this.unitImages = new Map<string, HTMLImageElement>();
+    this.loadUnitSprites();
   }
 
   render(state: Readonly<GameState>): void {
@@ -213,30 +219,25 @@ export class CanvasRenderer {
   }
 
   private drawUnit(unit: Unit): void {
-    const p = axialToPixel(unit.pos.q, unit.pos.r, this.size);
-    const cx = p.x;
-    const cy = p.y;
+    const p = axialToPixel(unit.q, unit.r, this.size);
+    const img = this.unitImages.get(unit.data.spriteKey);
 
-    // Unit marker
-    this.ctx.beginPath();
-    this.ctx.arc(cx, cy, (this.size * 0.35), 0, Math.PI * 2);
-    this.ctx.closePath();
+    if (!img || !img.complete) return;
 
-    if (unit.owner === 0) {
-      this.ctx.fillStyle = "#2b6cff";
-    } else {
-      this.ctx.fillStyle = "#ff2b2b";
-    }
+     // Target size (in world units). Use ONE dimension as base.
+  const targetH = (2 * this.size) * 0.7; // tweak factor to taste
+  const aspect = img.naturalWidth / img.naturalHeight;
+  const targetW = targetH * aspect;
 
-    this.ctx.fill();
-    this.ctx.strokeStyle = "#111111";
-    this.ctx.lineWidth = 1 / this.zoom;
-    this.ctx.stroke();
+  this.ctx.drawImage(
+    img,
+    p.x - targetW / 2,
+    p.y - targetH / 2,
+    targetW,
+    targetH
+  );
+}
 
-    this.ctx.fillStyle = "white";
-    this.ctx.font = `${12 / this.zoom}px sans-serif`;
-    this.ctx.fillText(String(unit.id), cx - 4 / this.zoom, cy + 4 / this.zoom);
-  }
     resetView(): void {
     this.panX = 0;
     this.panY = 0;
@@ -277,6 +278,12 @@ export class CanvasRenderer {
 
     img.src = url;
     this.tileImages.set(field, img);
+  }
+
+  private loadUnitSprites(): void {
+    const img = new Image();
+    img.src = "/units/infantry.png";
+    this.unitImages.set("infantry", img);
   }
 
   private handleAssetLoaded(): void {

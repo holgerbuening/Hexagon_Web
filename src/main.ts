@@ -13,6 +13,7 @@ renderer.setInvalidateHandler(renderAll);
 const hudTurn = document.getElementById("hudTurn") as HTMLSpanElement;
 const hudPlayer = document.getElementById("hudPlayer") as HTMLSpanElement;
 const hudSelected = document.getElementById("hudSelected") as HTMLSpanElement;
+const hudUnit = document.getElementById("hudUnit") as HTMLSpanElement;
 const hudZoom = document.getElementById("hudZoom") as HTMLSpanElement;
 
 // Render once initially
@@ -157,6 +158,18 @@ function updateHud(): void {
   } else {
     hudSelected.textContent = "-";
   }
+
+  if (state.selectedUnit !== null) {
+      const unit = state.units.find(u => u === state.selectedUnit);
+      if (unit) {
+        // Show basic unit info (extend later with unit type/stats)
+        hudUnit.textContent = `owner=${unit.owner}, hp=${unit.hp}, mv=${unit.remainingMovement}`;
+      } else {
+        hudUnit.textContent = "-";
+      }
+    } else {
+      hudUnit.textContent = "-";
+    }
 
   hudZoom.textContent = renderer.getZoom().toFixed(2);
 }

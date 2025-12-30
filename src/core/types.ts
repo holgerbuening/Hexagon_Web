@@ -1,3 +1,5 @@
+import { UnitType } from "./units/unitType";
+import { Unit } from "./units/unit";
 // Core shared types
 
 export type PlayerId = 0 | 1;
@@ -23,18 +25,11 @@ export enum FieldType {
   Industry = "Industry",
 }
 
-export interface Unit {
-  id: number;
-  owner: PlayerId;
-  pos: Axial;
-  hp: number;
-  movement: number;
-}
-
 export interface GameState {
   turn: number;
   currentPlayer: PlayerId;
   selectedHex: Axial | null;
+  selectedUnit: Unit | null;
   tiles: HexTile[];
   units: Unit[];
   mapWidth: number;

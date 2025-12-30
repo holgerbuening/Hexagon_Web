@@ -1,4 +1,6 @@
-import { FieldType, type Axial, type GameState, type HexTile, type Unit } from "./types";
+import { FieldType, type Axial, type GameState, type HexTile } from "./types";
+import  { Unit } from "./units/unit";
+import  { UnitType } from "./units/unitType";
 import { axialDistance } from "./hexMath";
 
 // Main game logic container (no rendering here)
@@ -12,6 +14,7 @@ export class GameCore {
       turn: 1,
       currentPlayer: 0,
       selectedHex: null,
+      selectedUnit: null,
       mapWidth: width,
       mapHeight: height,
       //tiles: this.createHexDisk(radius),
@@ -32,10 +35,17 @@ export class GameCore {
     const tile = this.getTile(pos);
     if (!tile) {
       this.state.selectedHex = null;
+      this.state.selectedUnit = null;
       return;
     }
     // Store the position of the selected tile
     this.state.selectedHex = { q: tile.q, r: tile.r };
+    const unit = this.getUnitAt(pos);
+    if (unit) {
+      this.state.selectedUnit = unit;
+    } else {
+      this.state.selectedUnit = null;
+    }
   }
 
   endTurn(): void {
@@ -113,16 +123,23 @@ export class GameCore {
   }
 
     private createTestUnits(): Unit[] {
-    return [
-      { id: 1, owner: 0, pos: { q: 0, r: 0 }, hp: 10, movement: 4 },
-      { id: 2, owner: 1, pos: { q: 2, r: -1 }, hp: 10, movement: 4 },
-    ];
+    const units: Unit[] = [];
+
+    // Player 0 units
+    units.push(new Unit(UnitType.Infantry, 2, 2, 0));
+    units.push(new Unit(UnitType.Infantry, 4, 3, 0));
+
+    // Player 1 units
+    units.push(new Unit(UnitType.Infantry, 7, 7, 1));
+    units.push(new Unit(UnitType.Infantry, 6, 5, 1));
+
+    return units;
   }
 
   // Example: find unit at a hex (useful later)
   getUnitAt(pos: Axial): Unit | undefined {
     for (const unit of this.state.units) {
-        if (unit.pos.q === pos.q && unit.pos.r === pos.r) {
+        if (unit.q === pos.q && unit.r === pos.r) {
         return unit;
         }
     }
