@@ -198,6 +198,18 @@ export class CanvasRenderer {
     this.ctx.font = `${12 / this.zoom}px sans-serif`;
     this.ctx.fillText(String(unit.id), cx - 4 / this.zoom, cy + 4 / this.zoom);
   }
+    resetView(): void {
+    this.panX = 0;
+    this.panY = 0;
+    this.zoom = 1.0;
+  }
+
+  zoomAtCenter(zoomFactor: number): void {
+    const centerX = this.canvas.width / 2;
+    const centerY = this.canvas.height / 2;
+    this.zoomAtScreenPoint(centerX, centerY, zoomFactor);
+  }
+
 }
 
 function tileMatches(a: Axial | null, b: Axial): boolean {
@@ -206,3 +218,5 @@ function tileMatches(a: Axial | null, b: Axial): boolean {
   }
   return a.q === b.q && a.r === b.r;
 }
+
+

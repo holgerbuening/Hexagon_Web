@@ -25,6 +25,25 @@ let lastY = 0;
 // If mouse moved more than this, treat as drag
 const DRAG_THRESHOLD_PX = 3;
 
+// --- Keyboard control state ---
+let panLeft = false;
+let panRight = false;
+let panUp = false;
+let panDown = false;
+
+let zoomIn = false;
+let zoomOut = false;
+let fastMode = false;
+
+let lastFrameTimeMs = 0;
+
+// Pan speed in pixels per second (screen space)
+const PAN_SPEED = 700;
+
+// Zoom speed factor per second (smooth exponential feel)
+const ZOOM_SPEED = 1.8;
+
+
 canvas.addEventListener("mousedown", function (ev) {
   if (ev.button !== 0) {
     return;
@@ -117,13 +136,6 @@ canvas.addEventListener("wheel", function (ev) {
   renderAll();
 }, { passive: false });
 
-// Press space to end turn
-window.addEventListener("keydown", function (ev) {
-  if (ev.code === "Space") {
-    game.endTurn();
-    renderAll();
-  }
-});
 
 function updateHud(): void {
   const state = game.getState();
@@ -166,4 +178,128 @@ window.addEventListener("resize", function () {
     renderAll();
   }
 });
+
+window.addEventListener("keydown", function (ev) {
+  // Existing: Space ends turn
+  if (ev.code === "Space") {
+    game.endTurn();
+    renderAll();
+    return;
+  }
+
+  // Reset view
+  if (ev.code === "Digit0" || ev.code === "Numpad0") {
+    renderer.resetView();
+    renderAll();
+    return;
+  }
+
+  // Pan keys
+  if (ev.code === "ArrowLeft" || ev.code === "KeyA") {
+    panLeft = true;
+  } else if (ev.code === "ArrowRight" || ev.code === "KeyD") {
+    panRight = true;
+  } else if (ev.code === "ArrowUp" || ev.code === "KeyW") {
+    panUp = true;
+  } else if (ev.code === "ArrowDown" || ev.code === "KeyS") {
+    panDown = true;
+  }
+
+  //fast mode
+  if (ev.code === "ShiftLeft" || ev.code === "ShiftRight") {
+    fastMode = true;
+
+  }
+
+  // Zoom keys (+/- and numpad)
+  if (ev.code === "KeyE" || ev.code === "NumpadAdd") {
+    zoomIn = true;
+    ev.preventDefault();
+  } else if (ev.code === "KeyQ" || ev.code === "NumpadSubtract") {
+    zoomOut = true;
+    ev.preventDefault();
+  }
+});
+
+window.addEventListener("keyup", function (ev) {
+  if (ev.code === "ArrowLeft" || ev.code === "KeyA") {
+    panLeft = false;
+  } else if (ev.code === "ArrowRight" || ev.code === "KeyD") {
+    panRight = false;
+  } else if (ev.code === "ArrowUp" || ev.code === "KeyW") {
+    panUp = false;
+  } else if (ev.code === "ArrowDown" || ev.code === "KeyS") {
+    panDown = false;
+  }
+
+  //fast mode
+  if (ev.code === "ShiftLeft" || ev.code === "ShiftRight") {
+    fastMode = false;
+  }
+
+  if (ev.code === "KeyE" || ev.code === "NumpadAdd") {
+    zoomIn = false;
+  } else if (ev.code === "KeyQ" || ev.code === "NumpadSubtract") {
+    zoomOut = false;
+  }
+});
+
+function animationLoop(timeMs: number): void {
+  if (lastFrameTimeMs === 0) {
+    lastFrameTimeMs = timeMs;
+  }
+
+  const dt = (timeMs - lastFrameTimeMs) / 1000.0;
+  lastFrameTimeMs = timeMs;
+
+  let didChange = false;
+
+  // Pan movement
+  let dx = 0;
+  let dy = 0;
+
+  if (panLeft) dx -= 1;
+  if (panRight) dx += 1;
+  if (panUp) dy -= 1;
+  if (panDown) dy += 1;
+
+  if (dx !== 0 || dy !== 0) {
+    // Normalize diagonal speed a bit
+    const len = Math.sqrt(dx * dx + dy * dy);
+    dx = dx / len;
+    dy = dy / len;
+
+    // Shift = faster
+    // (We read modifier state via keyboard event usually; here we keep it simple:
+    // you can add a separate shift flag if you want perfect behavior.)
+    let speed = PAN_SPEED;
+    if (fastMode) {
+      speed = PAN_SPEED * 2.2;
+    } 
+    
+    renderer.panBy(dx * speed * dt, dy * speed * dt);
+    didChange = true;
+  }
+
+  // Zoom (smooth exponential)
+  if (zoomIn && !zoomOut) {
+    const factor = Math.pow(ZOOM_SPEED, dt);
+    renderer.zoomAtCenter(factor);
+    didChange = true;
+  } else if (zoomOut && !zoomIn) {
+    const factor = Math.pow(ZOOM_SPEED, dt);
+    renderer.zoomAtCenter(1.0 / factor);
+    didChange = true;
+  }
+
+  if (didChange) {
+    renderAll();
+  }
+
+  requestAnimationFrame(animationLoop);
+}
+
+// Start loop
+requestAnimationFrame(animationLoop);
+
 
