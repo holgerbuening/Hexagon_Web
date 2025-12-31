@@ -1,6 +1,7 @@
-import { FieldType, type Axial, type GameState, type HexTile } from "./types";
+import { type Axial, type GameState, type HexTile } from "./types";
 import  { Unit } from "./units/unit";
 import  { UnitType } from "./units/unitType";
+import { FieldType, getFieldDef } from "./map/fieldTypes";
 import { axialDistance } from "./hexMath";
 
 // Main game logic container (no rendering here)
@@ -17,6 +18,8 @@ export class GameCore {
       selectedUnit: null,
       mapWidth: width,
       mapHeight: height,
+      reachableTiles: {},
+      moveOverlay: [],
       //tiles: this.createHexDisk(radius),
       tiles: this.createBaseMap(width, height),
       units: this.createTestUnits(),
@@ -26,12 +29,12 @@ export class GameCore {
   }
 
   // Expose immutable view (simple approach for now)
-  getState(): Readonly<GameState> {
+  public getState(): Readonly<GameState> {
     return this.state;
   }
 
   // Handle click selection
-  selectHex(pos: Axial): void {
+  public selectHex(pos: Axial): void {
     const tile = this.getTile(pos);
     if (!tile) {
       this.state.selectedHex = null;
@@ -43,15 +46,22 @@ export class GameCore {
     const unit = this.getUnitAt(pos);
     if (unit && unit.owner === this.state.currentPlayer) {
       this.state.selectedUnit = unit;
+      // Compute reachable tiles for this unit
+      this.state.moveOverlay = this.getReachableTilesForUnit(unit);
     } else {
       this.state.selectedUnit = null;
+      this.state.moveOverlay = [];
     }
+
+
   }
 
-  endTurn(): void {
+  public endTurn(): void {
     this.state.turn += 1;
     this.togglePlayer();
     this.state.selectedHex = null;
+    this.state.selectedUnit = null;
+    this.state.moveOverlay = [];
   }
 
   // --- helpers ---
@@ -140,8 +150,7 @@ export class GameCore {
     return units;
   }
 
-  // Example: find unit at a hex (useful later)
-  getUnitAt(pos: Axial): Unit | undefined {
+  private getUnitAt(pos: Axial): Unit | undefined {
     for (const unit of this.state.units) {
         if (unit.q === pos.q && unit.r === pos.r) {
         return unit;
@@ -150,26 +159,7 @@ export class GameCore {
     return undefined;
   }
 
-
-  // Example rule helper: can current player interact with a unit?
-  canSelectUnit(pos: Axial): boolean {
-    const unit = this.getUnitAt(pos);
-    if (!unit) {
-        return false;
-    }
-    if (unit.owner !== this.state.currentPlayer) {
-        return false;
-    }
-    return true;
-    }
-
-
-  // Example: movement range check (placeholder)
-  inMoveRange(from: Axial, to: Axial, maxSteps: number): boolean {
-    return axialDistance(from, to) <= maxSteps;
-  }
-
-  private createRandomMap(width: number, height: number): void {
+   private createRandomMap(width: number, height: number): void {
         
     const oceanAreas = Math.floor((width * height) / 80);
     const mountainAreas = Math.floor((width * height) / 60);
@@ -203,7 +193,7 @@ export class GameCore {
     
   }
 
-private growArea(
+  private growArea(
     startQ: number,
     startR: number,
     targetField: FieldType,
@@ -377,8 +367,144 @@ private growArea(
       return undefined;
     }
     return rowArray[col];
-}
+  }
 
+  private key(q: number, r: number): string {
+    // English comment: Stable key for maps/sets
+    return `${q},${r}`;
+  }
+
+  private getMovementCost(field: FieldType): number {
+    // English comment: Keep it simple and readable (no clever one-liners)
+    if (field === FieldType.Mountain) return 3;
+    if (field === FieldType.Hills) return 2;
+    if (field === FieldType.Woods) return 2;
+    if (field === FieldType.City) return 1;
+    if (field === FieldType.Industry) return 1;
+    if (field === FieldType.Farmland) return 1;
+    if (field === FieldType.Ocean) return 999; // not passable for infantry
+    return 1;
+  }
+
+  private isPassableForUnit(unit: Unit, tile: HexTile): boolean {
+    // English comment: Infantry can't move on Ocean (for now)
+    if (tile.field === FieldType.Ocean) {
+      return false;
+    }
+    return true;
+  }
+
+  private isOccupied(q: number, r: number): boolean {
+    for (const u of this.state.units) {
+      if (u.q === q && u.r === r) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Dijkstra-lite: compute all reachable tiles under movement points.
+   * - movement cost depends on field
+   * - cannot step onto occupied tiles
+   * - excludes the start tile itself
+   */
+  private getReachableTilesForUnit(unit: Unit): Axial[] {
+    const result: Axial[] = [];
+
+    const startQ = unit.q;
+    const startR = unit.r;
+
+    const dist = new Map<string, number>();
+    const open: { q: number; r: number; cost: number }[] = [];
+
+    dist.set(this.key(startQ, startR), 0);
+    open.push({ q: startQ, r: startR, cost: 0 });
+
+    while (open.length > 0) {
+      // English comment: pick node with lowest cost (simple O(n) is fine for small maps)
+      if (open.length === 0) {
+        break;
+      }
+
+      const first = open[0];
+      if (!first) {
+        break;
+      }
+
+      let bestIndex = 0;
+      let bestCost = first.cost;
+
+      for (let i = 1; i < open.length; i++) {
+        const candidate = open[i];
+        if (!candidate) {
+          continue;
+        }
+
+        if (candidate.cost < bestCost) {
+          bestCost = candidate.cost;
+          bestIndex = i;
+        }
+      }
+
+      const current = open.splice(bestIndex, 1)[0];
+      if (!current) {
+        continue;
+      }
+
+      const currentKey = this.key(current.q, current.r);
+      const currentBest = dist.get(currentKey);
+      if (currentBest === undefined) {
+        continue;
+      }
+      if (current.cost !== currentBest) {
+        // English comment: outdated entry
+        continue;
+      }
+
+      const neighbors = this.getNeighbors(current.q, current.r);
+      for (const n of neighbors) {
+        if (!this.isPassableForUnit(unit, n)) {
+          continue;
+        }
+
+        // Do not allow moving onto occupied tiles (but allow standing on own start)
+        if (!(n.q === startQ && n.r === startR)) {
+          if (this.isOccupied(n.q, n.r)) {
+            continue;
+          }
+        }
+
+        const stepCost = this.getMovementCost(n.field);
+        const nextCost = current.cost + stepCost;
+
+        if (nextCost > unit.remainingMovement) {
+          continue;
+        }
+
+        const nk = this.key(n.q, n.r);
+        const old = dist.get(nk);
+
+        if (old === undefined || nextCost < old) {
+          dist.set(nk, nextCost);
+          open.push({ q: n.q, r: n.r, cost: nextCost });
+        }
+      }
+    }
+
+    // Collect all reachable tiles except the start tile
+    for (const [k] of dist) {
+      if (k === this.key(startQ, startR)) {
+        continue;
+      }
+      const parts = k.split(",");
+      const q = Number(parts[0]);
+      const r = Number(parts[1]);
+      result.push({ q, r });
+    }
+
+    return result;
+  }
 
   
 }

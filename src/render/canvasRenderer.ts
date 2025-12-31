@@ -1,5 +1,5 @@
 import type { PlayerId,Axial, GameState, HexTile } from "../core/types";
-import { FieldType } from "../core/types";
+import { FieldType } from "../core/map/fieldTypes";
 import { axialToPixel } from "../core/hexMath";
 import type { Unit } from "../core/units/unit";
 
@@ -69,7 +69,13 @@ export class CanvasRenderer {
       const isSelected = tileMatches(state.selectedHex, tile);
       this.drawTile(tile, isSelected);
     }
-
+    // Draw movement overlay (yellow) BEFORE selected overlay (green)
+    if (state.moveOverlay && state.moveOverlay.length > 0) {
+      for (const pos of state.moveOverlay) {
+        // Yellow reachable tiles
+        this.drawOverlayHex(pos.q, pos.r, "#FFD400", "rgba(255, 212, 0, 0.22)", 3 / this.zoom);
+      }
+    }
     // Draw units
     for (const unit of state.units) {
       this.drawUnit(unit);
@@ -459,7 +465,30 @@ export class CanvasRenderer {
     }
     return "rgba(200, 0, 0, 0.95)"; // red
   }
+  private drawOverlayHex(
+    q: number,
+    r: number,
+    strokeColor: string,
+    fillColor: string,
+    lineWidth: number
+  ): void {
+    const p = axialToPixel(q, r, this.size);
+    const cx = p.x;
+    const cy = p.y;
 
+    this.buildHexPath(cx, cy);
+
+    // Fill first
+    this.ctx.save();
+    this.ctx.fillStyle = fillColor;
+    this.ctx.fill();
+    this.ctx.restore();
+
+    // Then stroke
+    this.ctx.lineWidth = lineWidth;
+    this.ctx.strokeStyle = strokeColor;
+    this.ctx.stroke();
+  }
 }
 
 function tileMatches(a: Axial | null, b: Axial): boolean {
