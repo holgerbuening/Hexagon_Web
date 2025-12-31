@@ -1,4 +1,4 @@
-import type { Axial, GameState, HexTile } from "../core/types";
+import type { PlayerId,Axial, GameState, HexTile } from "../core/types";
 import { FieldType } from "../core/types";
 import { axialToPixel } from "../core/hexMath";
 import type { Unit } from "../core/units/unit";
@@ -31,6 +31,9 @@ export class CanvasRenderer {
 
   // Unit image storage
   private unitImages: Map<string, HTMLImageElement>;
+
+  // Flag image storage
+  private flagImages = new Map<PlayerId, HTMLImageElement>();
 
   private invalidateHandler: (() => void) | null;
 
@@ -220,6 +223,8 @@ export class CanvasRenderer {
 
   private drawUnit(unit: Unit): void {
     const p = axialToPixel(unit.q, unit.r, this.size);
+    this.drawUnitFlag(unit, p.x, p.y);
+
     const img = this.unitImages.get(unit.data.spriteKey);
 
     if (!img || !img.complete) return;
@@ -236,7 +241,30 @@ export class CanvasRenderer {
     targetW,
     targetH
   );
-}
+  }
+
+  private drawUnitFlag(unit: Unit, cx: number, cy: number): void {
+    const img = this.getFlagImage(unit.owner);
+
+    if (!img.complete || img.naturalWidth <= 0) {
+      return;
+    }
+
+    // Flag size in world units (zoom handled by your existing transform)
+    const flagH = (2 * this.size) * 0.28; // tweak to taste
+    const aspect = img.naturalWidth / img.naturalHeight;
+    const flagW = flagH * aspect;
+
+    // Offset: "top-left" relative to unit center
+    const offsetX = -this.size * 0.55;
+    const offsetY = -this.size * 0.55;
+
+    const x = cx + offsetX - flagW / 2;
+    const y = cy + offsetY - flagH / 2;
+
+    this.ctx.drawImage(img, x, y, flagW, flagH);
+  }
+
 
     resetView(): void {
     this.panX = 0;
@@ -284,6 +312,16 @@ export class CanvasRenderer {
     const img = new Image();
     img.src = "/units/infantry.png";
     this.unitImages.set("infantry", img);
+  }
+
+  private getFlagImage(owner: PlayerId): HTMLImageElement {
+    let img = this.flagImages.get(owner);
+    if (!img) {
+      img = new Image();
+      img.src = `flags/player${owner}.png`;
+      this.flagImages.set(owner, img);
+    }
+    return img;
   }
 
   private handleAssetLoaded(): void {

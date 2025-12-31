@@ -1,10 +1,11 @@
 import { UnitType, UNIT_TYPES } from "./unitType";
+import type { PlayerId } from "../types";
 
 export class Unit {
   readonly type: UnitType;
   q: number;
   r: number;
-  owner: number;
+  owner: PlayerId;
 
   hp: number;
   experience: number = 0;
@@ -13,7 +14,7 @@ export class Unit {
 
   selected: boolean = false;
 
-  constructor(type: UnitType, q: number, r: number, owner: number) {
+  constructor(type: UnitType, q: number, r: number, owner: PlayerId) {
     this.type = type;
     this.q = q;
     this.r = r;

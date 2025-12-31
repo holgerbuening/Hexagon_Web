@@ -163,7 +163,7 @@ function updateHud(): void {
       const unit = state.units.find(u => u === state.selectedUnit);
       if (unit) {
         // Show basic unit info (extend later with unit type/stats)
-        hudUnit.textContent = `owner=${unit.owner}, hp=${unit.hp}, mv=${unit.remainingMovement}`;
+        hudUnit.textContent = ` owner=${unit.owner}, hp=${unit.hp}, mv=${unit.remainingMovement}`;
       } else {
         hudUnit.textContent = "-";
       }
