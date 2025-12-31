@@ -70,11 +70,12 @@ export class CanvasRenderer {
       this.drawTile(tile, isSelected);
     }
     // Draw movement overlay (yellow) BEFORE selected overlay (green)
-    if (state.moveOverlay && state.moveOverlay.length > 0) {
-      for (const pos of state.moveOverlay) {
-        // Yellow reachable tiles
-        this.drawOverlayHex(pos.q, pos.r, "#FFD400", "rgba(255, 212, 0, 0.22)", 3 / this.zoom);
-      }
+    const keys = Object.keys(state.reachableTiles);
+    for (const k of keys) {
+      const parts = k.split(",");
+      const q = Number(parts[0]);
+      const r = Number(parts[1]);
+      this.drawOverlayHex(q, r, "#FFD400", "rgba(255, 212, 0, 0.22)", 3 / this.zoom);
     }
     // Draw units
     for (const unit of state.units) {
@@ -109,7 +110,7 @@ export class CanvasRenderer {
   }
 
   // Zoom around a screen point (mouse position in canvas coords)
-  zoomAtScreenPoint(screenX: number, screenY: number, zoomFactor: number): void {
+  public zoomAtScreenPoint(screenX: number, screenY: number, zoomFactor: number): void {
     const oldZoom = this.zoom;
     let newZoom = oldZoom * zoomFactor;
 
@@ -136,7 +137,7 @@ export class CanvasRenderer {
     this.panY += dyWorld * this.zoom;
   }
 
-  getZoom(): number {
+  public getZoom(): number {
     return this.zoom;
   }
 
@@ -199,7 +200,6 @@ export class CanvasRenderer {
       this.ctx.stroke();
     }
   }
-
 
   private getTileFillColor(field: FieldType): string {
     if (field === FieldType.Farmland) {
@@ -326,13 +326,13 @@ export class CanvasRenderer {
     this.ctx.strokeRect(x, y, barW, barH);
   }
 
-  resetView(): void {
+  public resetView(): void {
     this.panX = 0;
     this.panY = 0;
     this.zoom = 1.0;
   }
 
-  zoomAtCenter(zoomFactor: number): void {
+  public zoomAtCenter(zoomFactor: number): void {
     const centerX = this.canvas.width / 2;
     const centerY = this.canvas.height / 2;
     this.zoomAtScreenPoint(centerX, centerY, zoomFactor);

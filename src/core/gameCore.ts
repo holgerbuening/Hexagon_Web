@@ -1,4 +1,4 @@
-import { type Axial, type GameState, type HexTile } from "./types";
+import { type Axial, type GameState, type HexTile, type PlayerId } from "./types";
 import  { Unit } from "./units/unit";
 import  { UnitType } from "./units/unitType";
 import { FieldType, getFieldDef } from "./map/fieldTypes";
@@ -39,29 +39,47 @@ export class GameCore {
     if (!tile) {
       this.state.selectedHex = null;
       this.state.selectedUnit = null;
+      this.state.reachableTiles = {};
       return;
     }
     // Store the position of the selected tile
     this.state.selectedHex = { q: tile.q, r: tile.r };
+
+    // 1.) Friendly unit clicked: select it + compute reachable tiles
     const unit = this.getUnitAt(pos);
     if (unit && unit.owner === this.state.currentPlayer) {
       this.state.selectedUnit = unit;
-      // Compute reachable tiles for this unit
-      this.state.moveOverlay = this.getReachableTilesForUnit(unit);
-    } else {
-      this.state.selectedUnit = null;
-      this.state.moveOverlay = [];
+      this.state.reachableTiles = this.getReachableTilesForUnit(unit);
+      return
+    } 
+
+    // 2.) If a unit is already selected, try to move it
+    if (this.state.selectedUnit) {
+      // Try to move selected unit to clicked tile
+      const selected=this.state.selectedUnit;
+      if (selected) { 
+        const moved = this.tryMoveUnitUsingOverlay(selected, pos);
+        if (moved) { 
+          this.state.reachableTiles = {};
+          return;
+        }
+      }
     }
 
-
+    // 3.) Nothing selected
+    this.state.selectedUnit = null;
+    this.state.reachableTiles = {};
   }
 
   public endTurn(): void {
     this.state.turn += 1;
+    this.resetMovementForPlayer(this.state.currentPlayer);
     this.togglePlayer();
     this.state.selectedHex = null;
     this.state.selectedUnit = null;
     this.state.moveOverlay = [];
+    this.state.reachableTiles = {};
+    
   }
 
   // --- helpers ---
@@ -409,8 +427,8 @@ export class GameCore {
    * - cannot step onto occupied tiles
    * - excludes the start tile itself
    */
-  private getReachableTilesForUnit(unit: Unit): Axial[] {
-    const result: Axial[] = [];
+  private getReachableTilesForUnit(unit: Unit): Record<string, number> {
+    const result: Record<string, number> = {};
 
     const startQ = unit.q;
     const startR = unit.r;
@@ -493,19 +511,53 @@ export class GameCore {
     }
 
     // Collect all reachable tiles except the start tile
-    for (const [k] of dist) {
-      if (k === this.key(startQ, startR)) {
+    const startKey = this.key(startQ, startR);
+
+    for (const [k, cost] of dist.entries()) {
+      if (k === startKey) {
         continue;
       }
-      const parts = k.split(",");
-      const q = Number(parts[0]);
-      const r = Number(parts[1]);
-      result.push({ q, r });
+      result[k] = cost;
     }
 
     return result;
   }
 
+  private tryMoveUnitUsingOverlay(unit: Unit, target: Axial): boolean {
+    const k = this.key(target.q, target.r);
+
+    const cost = this.state.reachableTiles[k];
+    if (cost === undefined) {
+      return false;
+    }
+
+    // Safety checks (optional, but good)
+    if (this.isOccupied(target.q, target.r)) {
+      return false;
+    }
+
+    // Apply move
+    unit.q = target.q;
+    unit.r = target.r;
+
+    // Reduce movement points
+    unit.remainingMovement = unit.remainingMovement - cost;
+
+    return true;
+  }
+
+  private resetMovementForUnit(unit: Unit): void {
+    // English comment: Reset remaining movement points to unit type maximum
+    unit.remainingMovement = unit.data.maxMovement;
+  }
+
+  private resetMovementForPlayer(player: PlayerId): void {
+    for (const unit of this.state.units) {
+      if (unit.owner === player) {
+        this.resetMovementForUnit(unit);
+      }
+    }
+  }
   
 }
 
