@@ -29,11 +29,10 @@ export class CanvasRenderer {
   private tileImages: Map<FieldType, HTMLImageElement>;
   private tileImagesLoaded: boolean;
 
-  // Unit image storage
+  // Unit, flag, and rank image storage
   private unitImages: Map<string, HTMLImageElement>;
-
-  // Flag image storage
   private flagImages = new Map<PlayerId, HTMLImageElement>();
+  private rankImages = new Map<number, HTMLImageElement>();
 
   private invalidateHandler: (() => void) | null;
 
@@ -224,6 +223,8 @@ export class CanvasRenderer {
   private drawUnit(unit: Unit): void {
     const p = axialToPixel(unit.q, unit.r, this.size);
     this.drawUnitFlag(unit, p.x, p.y);
+    this.drawUnitRank(unit, p.x, p.y);
+    this.drawHpBar(unit, p.x, p.y);
 
     const img = this.unitImages.get(unit.data.spriteKey);
 
@@ -265,8 +266,61 @@ export class CanvasRenderer {
     this.ctx.drawImage(img, x, y, flagW, flagH);
   }
 
+  private drawUnitRank(unit: Unit, cx: number, cy: number): void {
+  const img = this.getRankImage(unit.experience);
 
-    resetView(): void {
+  if (!img.complete || img.naturalWidth <= 0) {
+    return;
+  }
+
+  // Rank size in world units
+  const rankH = (2 * this.size) * 0.4; // tweak to taste
+  const aspect = img.naturalWidth / img.naturalHeight;
+  const rankW = rankH * aspect;
+
+  // Offset: "right side" relative to unit center
+  const offsetX = this.size * 0.62;
+  const offsetY = 0;
+
+  const x = cx + offsetX - rankW / 2;
+  const y = cy + offsetY - rankH / 2;
+
+  this.ctx.drawImage(img, x, y, rankW, rankH);
+  }
+
+  private drawHpBar(unit: Unit, cx: number, cy: number): void {
+    const hp = this.clampHp(unit.hp);
+    const hpRatio = hp / 100;
+
+    // Hex width ~ sqrt(3) * size
+    const hexWidth = Math.sqrt(3) * this.size;
+
+    // Bar dimensions relative to hex width
+    const barW = hexWidth * 0.70;
+    const barH = this.size * 0.12;
+
+    // Position: "feet" of the unit (slightly below center)
+    const offsetY = this.size * 0.62;
+
+    const x = cx - barW / 2;
+    const y = cy + offsetY - barH / 2;
+
+    // Background
+    this.ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+    this.ctx.fillRect(x, y, barW, barH);
+
+    // Fill
+    const fillW = barW * hpRatio;
+    this.ctx.fillStyle = this.getHpBarColor(hp);
+    this.ctx.fillRect(x, y, fillW, barH);
+
+    // Border (thin)
+    this.ctx.lineWidth = 1.5 / this.zoom;
+    this.ctx.strokeStyle = "rgba(255, 255, 255, 0.65)";
+    this.ctx.strokeRect(x, y, barW, barH);
+  }
+
+  resetView(): void {
     this.panX = 0;
     this.panY = 0;
     this.zoom = 1.0;
@@ -324,6 +378,19 @@ export class CanvasRenderer {
     return img;
   }
 
+  private getRankImage(experience: number): HTMLImageElement {
+    const clamped = this.clampExperience(experience);
+
+    let img = this.rankImages.get(clamped);
+    if (!img) {
+      img = new Image();
+      img.src = `rank/rank${clamped}.png`;
+      this.rankImages.set(clamped, img);
+    }
+
+    return img;
+  }
+
   private handleAssetLoaded(): void {
     if (this.invalidateHandler) {
       this.invalidateHandler();
@@ -364,6 +431,33 @@ export class CanvasRenderer {
     this.ctx.strokeStyle = "rgba(0, 180, 0, 0.95)";
     this.ctx.stroke();
     this.ctx.shadowBlur = 0;
+  }
+  private clampExperience(exp: number): number {
+    if (exp < 0) {
+      return 0;
+    }
+    if (exp > 10) {
+      return 10;
+    }
+    return exp;
+  }
+  private clampHp(hp: number): number {
+    if (hp < 0) {
+      return 0;
+    }
+    if (hp > 100) {
+      return 100;
+    }
+    return hp;
+  }
+  private getHpBarColor(hp: number): string {
+    if (hp >= 70) {
+      return "rgba(0, 180, 0, 0.95)"; // green
+    }
+    if (hp >= 35) {
+      return "rgba(230, 180, 0, 0.95)"; // yellow/orange
+    }
+    return "rgba(200, 0, 0, 0.95)"; // red
   }
 
 }

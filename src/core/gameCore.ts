@@ -122,13 +122,17 @@ export class GameCore {
     return tiles;
   }
 
-    private createTestUnits(): Unit[] {
+  private createTestUnits(): Unit[] {
     const units: Unit[] = [];
 
     // Player 0 units
     units.push(new Unit(UnitType.Infantry, 2, 2, 0));
     units.push(new Unit(UnitType.Infantry, 4, 3, 0));
-
+    let unittemp=units[units.length -1];
+    if (unittemp) {
+      unittemp.hp = 5; // damage for testing
+      unittemp.experience = 10;
+    }
     // Player 1 units
     units.push(new Unit(UnitType.Infantry, 7, 7, 1));
     units.push(new Unit(UnitType.Infantry, 6, 5, 1));
