@@ -23,9 +23,36 @@ export interface GameState {
   selectedHex: Axial | null;
   selectedUnit: Unit | null;
   reachableTiles: Record<string, number>;
-  moveOverlay: Axial[];
+  attackOverlay: Record<string, true>;
   tiles: HexTile[];
   units: Unit[];
   mapWidth: number;
   mapHeight: number;
 }
+
+export type CombatPreview = {
+  attackerPos: Axial;
+  defenderPos: Axial;
+
+  attackBase: number;
+  defenseBase: number;
+
+  minAttacker: number;
+  maxAttacker: number;
+  randomAttacker: number; // 0..99
+  attackPower: number;
+
+  minDefender: number;
+  maxDefender: number;
+  randomDefender: number; // 0..99
+  defensePower: number;
+
+  distance: number;
+  defenderCanCounter: boolean;
+
+  result: number;
+  randomDamage: number; // 1..5
+
+  damageDefender: number;
+  damageAttacker: number;
+};

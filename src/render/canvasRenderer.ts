@@ -77,6 +77,17 @@ export class CanvasRenderer {
       const r = Number(parts[1]);
       this.drawOverlayHex(q, r, "#FFD400", "rgba(255, 212, 0, 0.22)", 3 / this.zoom);
     }
+    // Draw attack overlay (red) on enemy units in range
+    const keys1 = Object.keys(state.attackOverlay);
+    for (const k of keys1) {
+      const parts = k.split(",");
+      const q = Number(parts[0]);
+      const r = Number(parts[1]);
+
+      this.drawOverlayHex(q, r, "#ff0000", "rgba(255,0,0,0.22)", 3 / this.zoom);
+    }
+
+
     // Draw units
     for (const unit of state.units) {
       this.drawUnit(unit);

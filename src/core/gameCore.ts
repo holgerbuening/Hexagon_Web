@@ -1,14 +1,18 @@
-import { type Axial, type GameState, type HexTile, type PlayerId } from "./types";
+import { type Axial, type GameState, type HexTile, type PlayerId , type CombatPreview} from "./types";
 import  { Unit } from "./units/unit";
 import  { UnitType } from "./units/unitType";
 import { FieldType, getFieldDef } from "./map/fieldTypes";
 import { axialDistance } from "./hexMath";
+type CombatRequest = {
+  attacker: Unit;
+  defender: Unit;
+};
 
 // Main game logic container (no rendering here)
 export class GameCore {
   private state: GameState;
   private tileGrid: HexTile[][]; // 2D array for easy access
-
+  
   constructor(width: number, height: number) {
     this.tileGrid = [];
     this.state = {
@@ -19,7 +23,7 @@ export class GameCore {
       mapWidth: width,
       mapHeight: height,
       reachableTiles: {},
-      moveOverlay: [],
+      attackOverlay: {},
       //tiles: this.createHexDisk(radius),
       tiles: this.createBaseMap(width, height),
       units: this.createTestUnits(),
@@ -34,13 +38,14 @@ export class GameCore {
   }
 
   // Handle click selection
-  public selectHex(pos: Axial): void {
+  public selectHex(pos: Axial): CombatPreview | null {
     const tile = this.getTile(pos);
     if (!tile) {
       this.state.selectedHex = null;
       this.state.selectedUnit = null;
       this.state.reachableTiles = {};
-      return;
+      this.state.attackOverlay = {};
+      return null;
     }
     // Store the position of the selected tile
     this.state.selectedHex = { q: tile.q, r: tile.r };
@@ -50,7 +55,8 @@ export class GameCore {
     if (unit && unit.owner === this.state.currentPlayer) {
       this.state.selectedUnit = unit;
       this.state.reachableTiles = this.getReachableTilesForUnit(unit);
-      return
+      this.state.attackOverlay = this.computeAttackOverlayForUnit(unit);
+      return null
     } 
 
     // 2.) If a unit is already selected, try to move it
@@ -61,23 +67,51 @@ export class GameCore {
         const moved = this.tryMoveUnitUsingOverlay(selected, pos);
         if (moved) { 
           this.state.reachableTiles = {};
-          return;
+          this.state.attackOverlay = {};
+          return null;
         }
       }
     }
 
-    // 3.) Nothing selected
+    // 3) Attack: if a unit is selected and we clicked an enemy in range -> open combat dialog
+    if (this.state.selectedUnit) {
+      const attacker = this.state.selectedUnit;
+      console.log("1. Attacker for combat check:", attacker);
+      if (!attacker.acted) {
+        const clickedUnit = this.getUnitAt(pos);
+        if (clickedUnit && clickedUnit.owner !== attacker.owner) {
+          console.log("2. Clicked unit for combat check:", clickedUnit,"Attack Overlay:", this.state.attackOverlay);
+          const k = this.key(clickedUnit.q, clickedUnit.r);
+          if (this.state.attackOverlay[k]) {
+            console.log("3. Attack valid, computing preview...");
+            const preview = this.computeCombatPreview(attacker, clickedUnit);
+            console.log("4. Combat preview:", preview);
+            // Clear overlays like in C++ after starting combat
+            this.state.reachableTiles = {};
+            this.state.attackOverlay = {};
+            this.state.selectedUnit = null;
+
+            return preview;
+          }
+        }
+      }
+    }
+
+
+    // 4.) Nothing selected
     this.state.selectedUnit = null;
     this.state.reachableTiles = {};
+    this.state.attackOverlay = {};
+    return null;
   }
 
   public endTurn(): void {
     this.state.turn += 1;
-    this.resetMovementForPlayer(this.state.currentPlayer);
+    this.resetUnitsOfPlayer(this.state.currentPlayer);
     this.togglePlayer();
     this.state.selectedHex = null;
     this.state.selectedUnit = null;
-    this.state.moveOverlay = [];
+    this.state.attackOverlay = {};
     this.state.reachableTiles = {};
     
   }
@@ -168,7 +202,7 @@ export class GameCore {
     return units;
   }
 
-  private getUnitAt(pos: Axial): Unit | undefined {
+  public getUnitAt(pos: Axial): Unit | undefined {
     for (const unit of this.state.units) {
         if (unit.q === pos.q && unit.r === pos.r) {
         return unit;
@@ -380,7 +414,7 @@ export class GameCore {
       return undefined;
     }
     const rowArray = this.tileGrid[row];
-    console.log('this.tileGrid[row]:', this.tileGrid[row]);
+    //console.log('this.tileGrid[row]:', this.tileGrid[row]);
     if (!rowArray) {
       return undefined;
     }
@@ -546,19 +580,201 @@ export class GameCore {
     return true;
   }
 
-  private resetMovementForUnit(unit: Unit): void {
-    // English comment: Reset remaining movement points to unit type maximum
-    unit.remainingMovement = unit.data.maxMovement;
+  private computeAttackOverlayForUnit(unit: Unit): Record<string, true> {
+    const result: Record<string, true> = {};
+    const range = this.getAttackRangeForUnit(unit);
+    const origin = this.getUnitPos(unit);
+
+    for (const other of this.state.units) {
+      if (other.owner === unit.owner) {
+        continue;
+      }
+
+      const targetPos = this.getUnitPos(other);
+      const dist = this.hexDistance(origin, targetPos);
+
+      if (dist <= range) {
+        result[this.key(other.q, other.r)] = true;
+      }
+    }
+
+    return result;
   }
 
-  private resetMovementForPlayer(player: PlayerId): void {
+
+  private resetUnit(unit: Unit): void {
+    // English comment: Reset remaining movement points to unit type maximum
+    unit.remainingMovement = unit.data.maxMovement;
+    unit.acted = false;
+  }
+
+  private resetUnitsOfPlayer(player: PlayerId): void {
     for (const unit of this.state.units) {
       if (unit.owner === player) {
-        this.resetMovementForUnit(unit);
+        this.resetUnit(unit);
       }
     }
   }
+
+  private hexDistance(a: Axial, b: Axial): number {
+    // English comment: Axial distance via cube coords
+    const dq = Math.abs(a.q - b.q);
+    const dr = Math.abs(a.r - b.r);
+    const ds = Math.abs((a.q + a.r) - (b.q + b.r));
+    return (dq + dr + ds) / 2;
+  }
+
+  private getAttackRangeForUnit(unit: Unit): number {
+    // English comment: Read from unit type definition
+    return unit.data.attackRange;
+  }
+
+  private getUnitPos(unit: Unit): Axial {
+    return { q: unit.q, r: unit.r };
+  }
+
+  private pendingCombat: CombatRequest | null = null;
+
+  public popCombatRequest(): CombatRequest | null {
+    // English comment: Main loop consumes this once to open the dialog
+    const req = this.pendingCombat;
+    this.pendingCombat = null;
+    return req;
+  }
+
+  public applyCombat(preview: CombatPreview): void {
+    // English comment: Apply combat results only after OK in dialog
+
+    const attacker = this.getUnitAt(preview.attackerPos);
+    const defender = this.getUnitAt(preview.defenderPos);
+
+    if (!attacker) return;
+    if (!defender) return;
+
+    // Only allow if attacker is current player and not acted
+    if (attacker.owner !== this.state.currentPlayer) return;
+    if (attacker.acted) return;
+
+    defender.hp = defender.hp - preview.damageDefender;
+    attacker.hp = attacker.hp - preview.damageAttacker;
+
+    if (defender.hp < 0) defender.hp = 0;
+    if (attacker.hp < 0) attacker.hp = 0;
+
+    attacker.experience = attacker.experience + 1;
+    if (attacker.experience > 10) attacker.experience = 10;
+
+    attacker.acted = true;
+
+    this.removeDeadUnits();
+
+    // Clear selection/overlays after combat
+    this.state.selectedUnit = null;
+    this.state.attackOverlay = {};
+  }
   
+  private removeDeadUnits(): void {
+    const survivors: Unit[] = [];
+    for (const u of this.state.units) {
+      if (u.hp > 0) {
+        survivors.push(u);
+      }
+    }
+    this.state.units = survivors;
+  }
+
+  private getFieldDefense(field: FieldType): number {
+    // English comment: Match C++ FieldType::getDefense values
+    if (field === FieldType.Woods) return 35;
+    if (field === FieldType.Ocean) return 0;
+    if (field === FieldType.Mountain) return 50;
+    if (field === FieldType.Farmland) return 15;
+    if (field === FieldType.Hills) return 35;
+    if (field === FieldType.City) return 40;
+    if (field === FieldType.Industry) return 40;
+    return 0;
+  }
+
+  public computeCombatPreview(attacker: Unit, defender: Unit): CombatPreview {
+    // English comment: Mirror CombatDialog::calculateCombat() from C++ exactly
+
+    const attackBase = attacker.offense + attacker.experience * 10;
+
+    const defenderTile = this.getTile(defender.pos);
+    let fieldDefense = 0;
+    if (defenderTile) {
+      fieldDefense = this.getFieldDefense(defenderTile.field);
+    }
+
+    const defenseBase = defender.defense + defender.experience * 10 + fieldDefense;
+
+    const distance = axialDistance(attacker.pos, defender.pos);
+    const defenderCanCounter = distance <= defender.attackRange;
+
+    const randomRangeDefender = Math.floor(defenseBase * 0.10);
+    const minDefender = defenseBase - randomRangeDefender;
+    const maxDefender = defenseBase + randomRangeDefender;
+    const randomDefender = Math.floor(Math.random() * 100);
+    const defenseFactor = randomDefender / 100.0;
+    const defensePower = minDefender + Math.floor(defenseFactor * (maxDefender - minDefender));
+
+    const randomRangeAttacker = Math.floor(attackBase * 0.25);
+    const minAttacker = attackBase - randomRangeAttacker;
+    const maxAttacker = attackBase + randomRangeAttacker * 2;
+    const randomAttacker = Math.floor(Math.random() * 100);
+    const attackFactor = randomAttacker / 100.0;
+    const attackPower = minAttacker + Math.floor(attackFactor * (maxAttacker - minAttacker));
+
+    const result = attackPower - defensePower;
+    const randomDamage = Math.floor(Math.random() * 5) + 1;
+
+    let damageDefender = 0;
+    if (result < 5) {
+      damageDefender = randomDamage;
+    } else {
+      damageDefender = result + randomDamage;
+    }
+
+    let damageAttacker = 0;
+    if (defenderCanCounter) {
+      if (result < 0) {
+        damageAttacker = -result + randomDamage;
+      } else {
+        damageAttacker = randomDamage;
+      }
+    } else {
+      damageAttacker = 0;
+    }
+
+    return {
+      attackerPos: { q: attacker.q, r: attacker.r },
+      defenderPos: { q: defender.q, r: defender.r },
+
+      attackBase,
+      defenseBase,
+
+      minAttacker,
+      maxAttacker,
+      randomAttacker,
+      attackPower,
+
+      minDefender,
+      maxDefender,
+      randomDefender,
+      defensePower,
+
+      distance,
+      defenderCanCounter,
+
+      result,
+      randomDamage,
+
+      damageDefender,
+      damageAttacker,
+    };
+  }
+
+
 }
 
  

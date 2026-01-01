@@ -1,6 +1,7 @@
 import { GameCore } from "./core/gameCore";
 import { pixelToAxial } from "./core/hexMath";
 import { CanvasRenderer } from "./render/canvasRenderer";
+import { showCombatDialog } from "./ui/combatDialog";
 
 const BASE_HEX_SIZE = 64;
 const canvas = document.getElementById("game") as HTMLCanvasElement;
@@ -15,6 +16,8 @@ const hudPlayer = document.getElementById("hudPlayer") as HTMLSpanElement;
 const hudSelected = document.getElementById("hudSelected") as HTMLSpanElement;
 const hudUnit = document.getElementById("hudUnit") as HTMLSpanElement;
 const hudZoom = document.getElementById("hudZoom") as HTMLSpanElement;
+// App root for dialogs
+const appRoot = document.getElementById("app");
 
 // Render once initially
 resizeCanvasToDisplaySize(canvas);
@@ -51,6 +54,7 @@ const PAN_SPEED = 700;
 
 // Zoom speed factor per second (smooth exponential feel)
 const ZOOM_SPEED = 1.8;
+
 
 
 canvas.addEventListener("mousedown", function (ev) {
@@ -114,7 +118,29 @@ canvas.addEventListener("mouseup", function (ev) {
   const world = renderer.screenToWorld(sx, sy);
   const hex = pixelToAxial(world.x, world.y, renderer.getHexSize());
 
-  game.selectHex(hex);
+  const preview = game.selectHex(hex);
+  console.log("Selected hex:", hex, "Combat preview Main.ts :", preview);
+  if (preview) {
+    
+    if (appRoot) {
+      // We need attacker/defender objects for the header display
+      console.log("AttackerPos:", preview.attackerPos.q, preview.attackerPos.r, "DefenderPos:", preview.defenderPos.q, preview.defenderPos.r);
+      const attacker = game.getUnitAt(preview.attackerPos);
+      const defender = game.getUnitAt(preview.defenderPos);
+      console.log("Attacker:", attacker, "Defender:", defender);
+      if (attacker && defender) {
+        showCombatDialog(appRoot, attacker, defender, preview, {
+          onOk: () => {
+            game.applyCombat(preview);
+            renderAll();
+          },
+          onCancel: () => {
+            renderAll();
+          },
+        });
+      }
+    }
+  }
   renderAll();
 });
 
