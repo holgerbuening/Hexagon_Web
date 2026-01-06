@@ -45,70 +45,31 @@ export class GameCore {
   public selectHex(pos: Axial): CombatPreview | null {
     const tile = this.getTile(pos);
     if (!tile) {
-      this.state.selectedHex = null;
-      this.state.selectedUnit = null;
-      this.state.reachableTiles = {};
-      this.state.attackOverlay = {};
+      this.clearSelectionAndOverlays(true);
       return null;
     }
-    // Store the position of the selected tile
+
+    // English comment: Always store last clicked hex
     this.state.selectedHex = { q: tile.q, r: tile.r };
 
-    // 1.) Friendly unit clicked: select it + compute reachable tiles
-    const unit = this.getUnitAt(pos);
-    if (unit && unit.owner === this.state.currentPlayer) {
-      this.state.selectedUnit = unit;
-      if (!unit.acted){
-        this.state.reachableTiles = this.movementSystem.computeReachableTiles(this.state, unit, (q, r) => this.getNeighbors(q, r));
-        this.state.attackOverlay = this.computeAttackOverlayForUnit(unit);
-      }
-      return null
-    } 
-
-    // 2.) If a unit is already selected, try to move it
-    if (this.state.selectedUnit) {
-      // Try to move selected unit to clicked tile
-      const selected=this.state.selectedUnit;
-      if (selected) { 
-        const moved = this.movementSystem.tryMoveUsingReachable(this.state, selected, pos, this.state.reachableTiles);
-        if (moved) {
-          //this.state.selectedUnit.acted = true; 
-          this.state.reachableTiles = {};
-          this.state.attackOverlay = {};
-          return null;
-        }
-      }
+    // 1) Friendly unit click -> select unit + overlays
+    if (this.handleFriendlyUnitClick(pos)) {
+      return null;
     }
 
-    // 3) Attack: if a unit is selected and we clicked an enemy in range -> open combat dialog
-    if (this.state.selectedUnit) {
-      const attacker = this.state.selectedUnit;
-      //console.log("1. Attacker for combat check:", attacker);
-      if (!attacker.acted) {
-        const clickedUnit = this.getUnitAt(pos);
-        if (clickedUnit && clickedUnit.owner !== attacker.owner) {
-          //console.log("2. Clicked unit for combat check:", clickedUnit,"Attack Overlay:", this.state.attackOverlay);
-          const k = MovementSystem.key(clickedUnit.q, clickedUnit.r);
-          if (this.state.attackOverlay[k]) {
-            //console.log("3. Attack valid, computing preview...");
-            const preview = this.combatSystem.computePreview( this.state, attacker, clickedUnit, (pos) => this.getTile(pos));
-            //console.log("4. Combat preview:", preview);
-            // Clear overlays like in C++ after starting combat
-            this.state.reachableTiles = {};
-            this.state.attackOverlay = {};
-            this.state.selectedUnit = null;
-
-            return preview;
-          }
-        }
-      }
+    // 2) Move attempt -> if moved, we're done
+    if (this.handleMoveAttempt(pos)) {
+      return null;
     }
 
+    // 3) Attack attempt -> may return preview
+    const preview = this.handleAttackAttempt(pos);
+    if (preview) {
+      return preview;
+    }
 
-    // 4.) Nothing selected
-    this.state.selectedUnit = null;
-    this.state.reachableTiles = {};
-    this.state.attackOverlay = {};
+    // 4) Nothing useful -> clear overlays + selectedUnit (keep selectedHex)
+    this.clearSelectionAndOverlays(false);
     return null;
   }
 
@@ -428,27 +389,6 @@ export class GameCore {
     return rowArray[col];
   }
  
-  private computeAttackOverlayForUnit(unit: Unit): Record<string, true> {
-    const result: Record<string, true> = {};
-    const range = this.getAttackRangeForUnit(unit);
-    const origin = this.getUnitPos(unit);
-
-    for (const other of this.state.units) {
-      if (other.owner === unit.owner) {
-        continue;
-      }
-
-      const targetPos = this.getUnitPos(other);
-      const dist = this.hexDistance(origin, targetPos);
-
-      if (dist <= range) {
-        result[MovementSystem.key(other.q, other.r)] = true;
-      }
-    }
-
-    return result;
-  }
-
   private resetUnitsOfPlayer(player: PlayerId): void {
     for (const unit of this.state.units) {
       if (unit.owner === player) {
@@ -456,24 +396,7 @@ export class GameCore {
       }
     }
   }
-
-  private hexDistance(a: Axial, b: Axial): number {
-    // English comment: Axial distance via cube coords
-    const dq = Math.abs(a.q - b.q);
-    const dr = Math.abs(a.r - b.r);
-    const ds = Math.abs((a.q + a.r) - (b.q + b.r));
-    return (dq + dr + ds) / 2;
-  }
-
-  private getAttackRangeForUnit(unit: Unit): number {
-    // English comment: Read from unit type definition
-    return unit.data.attackRange;
-  }
-
-  private getUnitPos(unit: Unit): Axial {
-    return { q: unit.q, r: unit.r };
-  }
-
+ 
   public applyCombat(preview: CombatPreview): void {
     this.combatSystem.apply(this.state, preview);
 
@@ -481,7 +404,96 @@ export class GameCore {
     this.state.selectedUnit = null;
     this.state.attackOverlay = {};
     this.state.reachableTiles = {};
-}
+  }
+
+  private clearSelectionAndOverlays(clearSelectedHex: boolean): void {
+    // English comment: Central reset to keep behavior consistent
+    if (clearSelectedHex) {
+      this.state.selectedHex = null;
+    }
+
+    this.state.selectedUnit = null;
+    this.state.reachableTiles = {};
+    this.state.attackOverlay = {};
+  }
+
+  private handleFriendlyUnitClick(pos: Axial): boolean {
+    const unit = this.getUnitAt(pos);
+    if (!unit) return false;
+
+    // English comment: Only react to friendly unit clicks
+    if (unit.owner !== this.state.currentPlayer) return false;
+
+    this.state.selectedUnit = unit;
+
+    // English comment: Only show overlays if unit has not acted yet
+    if (!unit.acted) {
+      this.state.reachableTiles = this.movementSystem.computeReachableTiles(
+        this.state,
+        unit,
+        (q, r) => this.getNeighbors(q, r)
+      );
+
+      this.state.attackOverlay = this.combatSystem.computeAttackOverlayForUnit(this.state, unit);
+    } else {
+      this.state.reachableTiles = {};
+      this.state.attackOverlay = {};
+    }
+
+    return true;
+  }
+
+  private handleMoveAttempt(pos: Axial): boolean {
+    const selected = this.state.selectedUnit;
+    if (!selected) return false;
+
+    // English comment: Try to move selected unit to clicked tile based on reachable map
+    const moved = this.movementSystem.tryMoveUsingReachable(
+      this.state,
+      selected,
+      pos,
+      this.state.reachableTiles
+    );
+
+    if (!moved) return false;
+
+    // English comment: After a successful move, clear overlays (same behavior as before)
+    this.state.reachableTiles = {};
+    this.state.attackOverlay = {};
+    return true;
+  }
+
+  private handleAttackAttempt(pos: Axial): CombatPreview | null {
+    const attacker = this.state.selectedUnit;
+    if (!attacker) return null;
+
+    // English comment: Attacker must be able to act
+    if (attacker.acted) return null;
+
+    const defender = this.getUnitAt(pos);
+    if (!defender) return null;
+
+    // English comment: Must be enemy
+    if (defender.owner === attacker.owner) return null;
+
+    // English comment: Must be inside precomputed attack overlay
+    const k = MovementSystem.key(defender.q, defender.r);
+    if (!this.state.attackOverlay[k]) return null;
+
+    const preview = this.combatSystem.computePreview(
+      this.state,
+      attacker,
+      defender,
+      (p) => this.getTile(p)
+    );
+
+    // English comment: Clear overlays like your previous implementation (Qt-like behavior)
+    this.state.reachableTiles = {};
+    this.state.attackOverlay = {};
+    this.state.selectedUnit = null;
+
+    return preview;
+  }
 
 
 }

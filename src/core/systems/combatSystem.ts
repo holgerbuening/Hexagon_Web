@@ -2,6 +2,7 @@ import type { Axial, CombatPreview, GameState, HexTile } from "../types";
 import { axialDistance } from "../hexMath";
 import { getFieldDef } from "../map/fieldTypes";
 import type { Unit } from "../units/unit";
+import { MovementSystem } from "./movementSystem";
 
 export class CombatSystem {
   private getUnitAt(state: GameState, pos: Axial): Unit | undefined {
@@ -129,4 +130,25 @@ export class CombatSystem {
 
     this.removeDeadUnits(state);
   }
+
+  public computeAttackOverlayForUnit(state: GameState, unit: Unit): Record<string, true> {
+    // English comment: Returns a map of enemy unit positions that are within attack range
+    const result: Record<string, true> = {};
+    const range = unit.data.attackRange;
+    const origin: Axial = { q: unit.q, r: unit.r };
+
+    for (const other of state.units) {
+      if (other.owner === unit.owner) continue;
+
+      const target: Axial = { q: other.q, r: other.r };
+      const dist = axialDistance(origin, target);
+
+      if (dist <= range) {
+        result[MovementSystem.key(other.q, other.r)] = true;
+      }
+    }
+
+    return result;
+  }
+   
 }
