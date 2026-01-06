@@ -5,10 +5,8 @@ import { FieldType, getFieldDef } from "./map/fieldTypes";
 import { axialDistance } from "./hexMath";
 import { CombatSystem } from "./systems/combatSystem";
 import { MovementSystem } from "./systems/movementSystem";
-type CombatRequest = {
-  attacker: Unit;
-  defender: Unit;
-};
+import { MapGenerator } from "./map/mapGenerator";
+
 
 // Main game logic container (no rendering here)
 export class GameCore {
@@ -16,6 +14,7 @@ export class GameCore {
   private tileGrid: HexTile[][]; // 2D array for easy access
   private combatSystem: CombatSystem = new CombatSystem();
   private movementSystem: MovementSystem = new MovementSystem();
+  private mapGenerator: MapGenerator = new MapGenerator();
   
   constructor(width: number, height: number) {
     this.tileGrid = [];
@@ -33,7 +32,7 @@ export class GameCore {
       units: this.createTestUnits(),
     };
     
-    this.createRandomMap(width, height);
+    this.createNewMap(width, height);
   }
 
   // Expose immutable view (simple approach for now)
@@ -179,181 +178,6 @@ export class GameCore {
     return undefined;
   }
 
-   private createRandomMap(width: number, height: number): void {
-        
-    const oceanAreas = Math.floor((width * height) / 80);
-    const mountainAreas = Math.floor((width * height) / 60);
-
-    for (let i = 0; i < oceanAreas; i++) {
-      const q = Math.floor(Math.random() * width);
-      const r = Math.floor(Math.random() * height);
-      this.growArea(q + this.getQOffsetForRow(r), r, FieldType.Ocean, 12);
-    }
-
-    for (let i = 0; i < mountainAreas; i++) {
-      const q = Math.floor(Math.random() * width);
-      const r = Math.floor(Math.random() * height);
-      this.growArea(q + this.getQOffsetForRow(r), r, FieldType.Mountain, 8);
-    }
-      for (const tile of this.state.tiles) {
-    if (tile.field !== FieldType.Farmland) {
-      continue;
-    }
-
-    const rnd = Math.floor(Math.random() * 100);
-
-    if (rnd < 20) {
-      tile.field = FieldType.Hills;
-      } else if (rnd < 70) {
-      tile.field = FieldType.Woods;
-      }
-    }
-    this.placeCities(width, height);
-    this.placeIndustries(width, height);
-    
-  }
-
-  private growArea(
-    startQ: number,
-    startR: number,
-    targetField: FieldType,
-    maxSize: number
-  ): void {
-    const stack: { q: number; r: number }[] = [];
-    stack.push({ q: startQ, r: startR });
-
-    let painted = 0;
-
-    while (stack.length > 0 && painted < maxSize) {
-      const current = stack.pop();
-      if (!current) {
-        break;
-      }
-      let tempAxial: Axial = {q: current.q, r: current.r};  
-      const tile = this.getTile(tempAxial);
-      if (!tile) {
-        continue;
-      }
-
-      if (tile.field !== FieldType.Farmland) {
-        continue;
-      }
-
-      tile.field = targetField;
-      painted++;
-
-      const neighbors = this.getNeighbors(tile.q, tile.r);
-
-      // shuffle neighbors (like std::shuffle)
-      for (let i = neighbors.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-
-        const a = neighbors[i];
-        const b = neighbors[j];
-
-        if (!a || !b) {
-          continue;
-        }
-
-        neighbors[i] = b;
-        neighbors[j] = a;
-      }
-
-
-      for (const n of neighbors) {
-        stack.push({ q: n.q, r: n.r });
-      }
-    }
-  } 
-
-  private isLand(field: FieldType): boolean {
-    // In the original C++ version: territory == 0 means land.
-    // Here we treat Ocean as water, everything else as land.
-    if (field === FieldType.Ocean) {
-      return false;
-    }
-    return true;
-  }
-
-  private placeCities(width: number, height: number): void {
-    const cityCount = Math.floor((width * height) / 80); // 1 city per 80 hexes
-    let placedCities = 0;
-
-    // Avoid endless loops if the map has too little land
-    const maxAttempts = cityCount * 200;
-    let attempts = 0;
-
-    while (placedCities < cityCount && attempts < maxAttempts) {
-      attempts++;
-
-      const r = Math.floor(Math.random() * height);
-      const qOffset = this.getQOffsetForRow(r);
-      const q = qOffset + Math.floor(Math.random() * width);
-
-      const tile = this.getTile({ q: q, r: r });
-      if (!tile) {
-        continue;
-      }
-
-      if (!this.isLand(tile.field)) {
-        continue;
-      }
-
-      // Place city
-      tile.field = FieldType.City;
-      placedCities++;
-    }
-
-    console.log(placedCities + " Cities placed");
-  }
-
-  private placeIndustries(width: number, height: number): void {
-    const industryCount = Math.floor((width * height) / 60); // 1 industry per 60 hexes
-    let placedIndustries = 0;
-
-    const maxAttempts = industryCount * 200;
-    let attempts = 0;
-
-    while (placedIndustries < industryCount && attempts < maxAttempts) {
-      attempts++;
-
-      const r = Math.floor(Math.random() * height);
-      const qOffset = this.getQOffsetForRow(r);
-      const q = qOffset + Math.floor(Math.random() * width);
-
-      const tile = this.getTile({ q: q, r: r });
-      if (!tile) {
-        continue;
-      }
-
-      if (!this.isLand(tile.field)) {
-        continue;
-      }
-
-      // Must not overwrite a city (same rule as in C++)
-      if (tile.field === FieldType.City) {
-        continue;
-      }
-
-      tile.field = FieldType.Industry;
-      placedIndustries++;
-    }
-
-    console.log(placedIndustries + " Industries placed");
-  }
-
-  private getQOffsetForRow(r: number): number {
-  // odd-r offset layout:
-  // odd rows are shifted left by 1
-  let qOffset: number = 0;
-  for (let i = 0; i < r; i++) {
-    if ((i % 2) === 1) {
-        qOffset --;
-   }
-  }
-  return qOffset;
-  }
-
   public tryGetMapCenterTile(): HexTile | undefined {
     const width = this.state.mapWidth;
     const height = this.state.mapHeight;
@@ -493,6 +317,22 @@ export class GameCore {
     this.state.selectedUnit = null;
 
     return preview;
+  }
+
+  public createNewMap(width: number, height: number): void {
+    this.state.mapWidth = width;
+    this.state.mapHeight = height;
+
+    const generated = this.mapGenerator.generate(width, height);
+
+    this.state.tiles = generated.tiles;
+    this.tileGrid = generated.tileGrid;
+
+    // English comment: Clear selection/overlays because map changed
+    this.state.selectedHex = null;
+    this.state.selectedUnit = null;
+    this.state.reachableTiles = {};
+    this.state.attackOverlay = {};
   }
 
 
