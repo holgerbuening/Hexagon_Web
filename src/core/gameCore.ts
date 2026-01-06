@@ -3,6 +3,7 @@ import  { Unit } from "./units/unit";
 import  { UnitType } from "./units/unitType";
 import { FieldType, getFieldDef } from "./map/fieldTypes";
 import { axialDistance } from "./hexMath";
+import { CombatSystem } from "./systems/combatSystem";
 type CombatRequest = {
   attacker: Unit;
   defender: Unit;
@@ -12,6 +13,7 @@ type CombatRequest = {
 export class GameCore {
   private state: GameState;
   private tileGrid: HexTile[][]; // 2D array for easy access
+  private combatSystem: CombatSystem = new CombatSystem();
   
   constructor(width: number, height: number) {
     this.tileGrid = [];
@@ -87,7 +89,7 @@ export class GameCore {
           const k = this.key(clickedUnit.q, clickedUnit.r);
           if (this.state.attackOverlay[k]) {
             //console.log("3. Attack valid, computing preview...");
-            const preview = this.computeCombatPreview(attacker, clickedUnit);
+            const preview = this.combatSystem.computePreview( this.state, attacker, clickedUnit, (pos) => this.getTile(pos));
             //console.log("4. Combat preview:", preview);
             // Clear overlays like in C++ after starting combat
             this.state.reachableTiles = {};
@@ -629,137 +631,14 @@ export class GameCore {
     return { q: unit.q, r: unit.r };
   }
 
-   public applyCombat(preview: CombatPreview): void {
-    // English comment: Apply combat results only after OK in dialog
+  public applyCombat(preview: CombatPreview): void {
+    this.combatSystem.apply(this.state, preview);
 
-    const attacker = this.getUnitAt(preview.attackerPos);
-    const defender = this.getUnitAt(preview.defenderPos);
-
-    if (!attacker) return;
-    if (!defender) return;
-
-    // Only allow if attacker is current player and not acted
-    if (attacker.owner !== this.state.currentPlayer) return;
-    if (attacker.acted) return;
-
-    defender.hp = defender.hp - preview.damageDefender;
-    attacker.hp = attacker.hp - preview.damageAttacker;
-
-    if (defender.hp < 0) defender.hp = 0;
-    if (attacker.hp < 0) attacker.hp = 0;
-
-    attacker.experience = attacker.experience + 1;
-    if (attacker.experience > 10) attacker.experience = 10;
-
-    attacker.acted = true;
-
-    this.removeDeadUnits();
-
-    // Clear selection/overlays after combat
+    // Clear selection/overlays after combat (UI/interaction belongs in GameCore)
     this.state.selectedUnit = null;
     this.state.attackOverlay = {};
-  }
-  
-  private removeDeadUnits(): void {
-    const survivors: Unit[] = [];
-    for (const u of this.state.units) {
-      if (u.hp > 0) {
-        survivors.push(u);
-      }
-    }
-    this.state.units = survivors;
-  }
-
-  private getFieldDefense(field: FieldType): number {
-    // English comment: Match C++ FieldType::getDefense values
-    if (field === FieldType.Woods) return 35;
-    if (field === FieldType.Ocean) return 0;
-    if (field === FieldType.Mountain) return 50;
-    if (field === FieldType.Farmland) return 15;
-    if (field === FieldType.Hills) return 35;
-    if (field === FieldType.City) return 40;
-    if (field === FieldType.Industry) return 40;
-    return 0;
-  }
-
-  public computeCombatPreview(attacker: Unit, defender: Unit): CombatPreview {
-    // English comment: Mirror CombatDialog::calculateCombat() from C++ exactly
-
-    const attackBase = attacker.offense + attacker.experience * 10;
-
-    const defenderTile = this.getTile(defender.pos);
-    let fieldDefense = 0;
-    if (defenderTile) {
-      fieldDefense = this.getFieldDefense(defenderTile.field);
-    }
-
-    const defenseBase = defender.defense + defender.experience * 10 + fieldDefense;
-
-    const distance = axialDistance(attacker.pos, defender.pos);
-    const defenderCanCounter = distance <= defender.attackRange;
-
-    const randomRangeDefender = Math.floor(defenseBase * 0.10);
-    const minDefender = defenseBase - randomRangeDefender;
-    const maxDefender = defenseBase + randomRangeDefender;
-    const randomDefender = Math.floor(Math.random() * 100);
-    const defenseFactor = randomDefender / 100.0;
-    const defensePower = minDefender + Math.floor(defenseFactor * (maxDefender - minDefender));
-
-    const randomRangeAttacker = Math.floor(attackBase * 0.25);
-    const minAttacker = attackBase - randomRangeAttacker;
-    const maxAttacker = attackBase + randomRangeAttacker * 2;
-    const randomAttacker = Math.floor(Math.random() * 100);
-    const attackFactor = randomAttacker / 100.0;
-    const attackPower = minAttacker + Math.floor(attackFactor * (maxAttacker - minAttacker));
-
-    const result = attackPower - defensePower;
-    const randomDamage = Math.floor(Math.random() * 5) + 1;
-
-    let damageDefender = 0;
-    if (result < 5) {
-      damageDefender = randomDamage;
-    } else {
-      damageDefender = result + randomDamage;
-    }
-
-    let damageAttacker = 0;
-    if (defenderCanCounter) {
-      if (result < 0) {
-        damageAttacker = -result + randomDamage;
-      } else {
-        damageAttacker = randomDamage;
-      }
-    } else {
-      damageAttacker = 0;
-    }
-
-    return {
-      attackerPos: { q: attacker.q, r: attacker.r },
-      defenderPos: { q: defender.q, r: defender.r },
-
-      attackBase,
-      defenseBase,
-
-      minAttacker,
-      maxAttacker,
-      randomAttacker,
-      attackPower,
-
-      minDefender,
-      maxDefender,
-      randomDefender,
-      defensePower,
-
-      distance,
-      defenderCanCounter,
-
-      result,
-      randomDamage,
-
-      damageDefender,
-      damageAttacker,
-    };
-  }
+    this.state.reachableTiles = {};
+}
 
 
 }
