@@ -346,9 +346,7 @@ function combatDialog(preview: CombatPreview): void {
             game.applyCombat(preview);
             renderAll();
           },
-          onCancel: () => {
-            renderAll();
-          },
+          
         });
       }
     }

@@ -4,23 +4,34 @@ import type { Unit } from "../core/units/unit";
 
 type CombatDialogHandlers = {
   onOk: () => void;
-  onCancel: () => void;
 };
 
-function createRow(label: string, value: string): HTMLDivElement {
-  // English comment: Small helper to keep DOM creation readable
-  const row = document.createElement("div");
-  row.className = "modalRow";
+function createStatLine(label: string, value: string): HTMLDivElement {
+  // English comment: Helper for left/right aligned stat rows
+  const line = document.createElement("div");
+  line.className = "dialog-statline";
 
-  const left = document.createElement("div");
+  const left = document.createElement("span");
+  left.className = "dialog-statlabel";
   left.textContent = label;
 
-  const right = document.createElement("div");
+  const right = document.createElement("span");
+  right.className = "dialog-statvalue";
   right.textContent = value;
 
-  row.appendChild(left);
-  row.appendChild(right);
-  return row;
+  line.appendChild(left);
+  line.appendChild(right);
+  return line;
+}
+
+function getFlagUrl(unit: Unit): string {
+  // English comment: owner is expected to be 0 or 1
+  return `/flags/player${unit.owner}.png`;
+}
+
+function getUnitImageUrl(unit: Unit): string {
+  // English comment: unit.type maps directly to sprite filename
+  return `/units/${String(unit.type).toLowerCase()}.png`;
 }
 
 export function showCombatDialog(
@@ -30,88 +41,163 @@ export function showCombatDialog(
   preview: CombatPreview,
   handlers: CombatDialogHandlers
 ): void {
-  // English comment: Backdrop
-  const backdrop = document.createElement("div");
-  backdrop.className = "modalBackdrop";
+  // Overlay
+  const overlay = document.createElement("div");
+  overlay.className = "dialog-overlay";
 
-  // English comment: Modal panel
-  const modal = document.createElement("div");
-  modal.className = "modal";
+  // Dialog container with fixed background
+  const dialog = document.createElement("div");
+  dialog.className = "dialog";
+  dialog.style.backgroundImage =
+    'url("/background/combatbackground.png")';
 
-  const title = document.createElement("h2");
-  title.textContent = "Combat";
-  modal.appendChild(title);
+  const content = document.createElement("div");
+  content.className = "dialog-content";
 
-  const grid = document.createElement("div");
-  grid.className = "modalGrid";
+  const columns = document.createElement("div");
+  columns.className = "dialog-columns";
 
+  /* ================= Attacker ================= */
   const leftCol = document.createElement("div");
+  leftCol.className = "dialog-column";
+
+  const leftTitle = document.createElement("h3");
+  leftTitle.textContent = "Attacker";
+  leftCol.appendChild(leftTitle);
+
+  const attackerFlag = document.createElement("img");
+  attackerFlag.className = "dialog-flag";
+  attackerFlag.src = getFlagUrl(attacker);
+  leftCol.appendChild(attackerFlag);
+
+  const attackerImg = document.createElement("img");
+  attackerImg.className = "dialog-unit";
+  attackerImg.src = getUnitImageUrl(attacker);
+  leftCol.appendChild(attackerImg);
+
+  const attackerStats = document.createElement("div");
+  attackerStats.className = "dialog-stats";
+  attackerStats.appendChild(
+    createStatLine("HP", `${attacker.hp}/${attacker.maxHP}`)
+  );
+  attackerStats.appendChild(
+    createStatLine("Offense", String(preview.attackBase))
+  );
+  attackerStats.appendChild(
+    createStatLine("Min", String(preview.minAttacker))
+  );
+  attackerStats.appendChild(
+    createStatLine("Max", String(preview.maxAttacker))
+  );
+  attackerStats.appendChild(
+    createStatLine("Random", String(preview.randomAttacker))
+  );
+  attackerStats.appendChild(
+    createStatLine("Final", String(preview.attackPower))
+  );
+  leftCol.appendChild(attackerStats);
+
+  /* ================= Defender ================= */
   const rightCol = document.createElement("div");
+  rightCol.className = "dialog-column";
 
-  leftCol.appendChild(createRow("Attacker HP", `${attacker.hp}/${attacker.maxHP}`));
-  leftCol.appendChild(createRow("AttackBase", String(preview.attackBase)));
-  leftCol.appendChild(createRow("Min", String(preview.minAttacker)));
-  leftCol.appendChild(createRow("Max", String(preview.maxAttacker)));
-  leftCol.appendChild(createRow("Random(0..99)", String(preview.randomAttacker)));
-  leftCol.appendChild(createRow("Final", String(preview.attackPower)));
-  leftCol.appendChild(createRow("Damage taken", String(preview.damageAttacker)));
+  const rightTitle = document.createElement("h3");
+  rightTitle.textContent = "Defender";
+  rightCol.appendChild(rightTitle);
 
-  rightCol.appendChild(createRow("Defender HP", `${defender.hp}/${defender.maxHP}`));
-  rightCol.appendChild(createRow("DefenseBase", String(preview.defenseBase)));
-  rightCol.appendChild(createRow("Min", String(preview.minDefender)));
-  rightCol.appendChild(createRow("Max", String(preview.maxDefender)));
-  rightCol.appendChild(createRow("Random(0..99)", String(preview.randomDefender)));
-  rightCol.appendChild(createRow("Final", String(preview.defensePower)));
-  rightCol.appendChild(createRow("Damage taken", String(preview.damageDefender)));
+  const defenderFlag = document.createElement("img");
+  defenderFlag.className = "dialog-flag";
+  defenderFlag.src = getFlagUrl(defender);
+  rightCol.appendChild(defenderFlag);
 
-  grid.appendChild(leftCol);
-  grid.appendChild(rightCol);
+  const defenderImg = document.createElement("img");
+  defenderImg.className = "dialog-unit";
+  defenderImg.src = getUnitImageUrl(defender);
+  rightCol.appendChild(defenderImg);
 
-  modal.appendChild(grid);
+  const defenderStats = document.createElement("div");
+  defenderStats.className = "dialog-stats";
+  defenderStats.appendChild(
+    createStatLine("HP", `${defender.hp}/${defender.maxHP}`)
+  );
+  defenderStats.appendChild(
+    createStatLine("Defense", String(preview.defenseBase))
+  );
+  defenderStats.appendChild(
+    createStatLine("Min", String(preview.minDefender))
+  );
+  defenderStats.appendChild(
+    createStatLine("Max", String(preview.maxDefender))
+  );
+  defenderStats.appendChild(
+    createStatLine("Random", String(preview.randomDefender))
+  );
+  defenderStats.appendChild(
+    createStatLine("Final", String(preview.defensePower))
+  );
+  rightCol.appendChild(defenderStats);
 
-  const info = document.createElement("div");
-  info.style.marginTop = "10px";
-  info.style.fontSize = "13px";
-  info.textContent =
-    `Distance: ${preview.distance} | Counter: ${preview.defenderCanCounter ? "yes" : "no"} | RandomDamage: ${preview.randomDamage}`;
-  modal.appendChild(info);
+  columns.appendChild(leftCol);
+  columns.appendChild(rightCol);
+  content.appendChild(columns);
 
-  const buttons = document.createElement("div");
-  buttons.className = "modalButtons";
+  /* ================= Damage ================= */
+  const damageRow = document.createElement("div");
+  damageRow.className = "dialog-columns";
+  damageRow.style.marginTop = "16px";
 
-  const cancelBtn = document.createElement("button");
-  cancelBtn.textContent = "Cancel";
+  const dmgAttacker = document.createElement("div");
+  dmgAttacker.className = "dialog-column dialog-damage";
+  dmgAttacker.innerHTML = `
+    <div>Damage (Attacker)</div>
+    <div class="dialog-damage-value dialog-damage-value--red">
+      ${preview.damageAttacker}
+    </div>
+  `;
+
+  const dmgDefender = document.createElement("div");
+  dmgDefender.className = "dialog-column dialog-damage";
+  dmgDefender.innerHTML = `
+    <div>Damage (Defender)</div>
+    <div class="dialog-damage-value dialog-damage-value--green">
+      ${preview.damageDefender}
+    </div>
+  `;
+
+  damageRow.appendChild(dmgAttacker);
+  damageRow.appendChild(dmgDefender);
+  content.appendChild(damageRow);
+
+  /* ================= Footer ================= */
+  const footer = document.createElement("div");
+  footer.className = "dialog-footer";
 
   const okBtn = document.createElement("button");
+  okBtn.className = "dialog-button";
   okBtn.textContent = "OK";
+  footer.appendChild(okBtn);
 
-  buttons.appendChild(cancelBtn);
-  buttons.appendChild(okBtn);
-  modal.appendChild(buttons);
+  content.appendChild(footer);
+  dialog.appendChild(content);
+  overlay.appendChild(dialog);
+  appRoot.appendChild(overlay);
 
-  backdrop.appendChild(modal);
-  appRoot.appendChild(backdrop);
+  const onKeyDown = (ev: KeyboardEvent) => {
+    if (ev.key === "Escape") {
+      close();
+      handlers.onOk();
+    }
+  };
 
   function close(): void {
-    // English comment: Remove modal from DOM
-    appRoot.removeChild(backdrop);
+    window.removeEventListener("keydown", onKeyDown);
+    appRoot.removeChild(overlay);
   }
 
-  cancelBtn.addEventListener("click", () => {
-    close();
-    handlers.onCancel();
-  });
+  window.addEventListener("keydown", onKeyDown);
 
   okBtn.addEventListener("click", () => {
     close();
     handlers.onOk();
-  });
-
-  // Optional: click outside to cancel
-  backdrop.addEventListener("click", (ev) => {
-    if (ev.target === backdrop) {
-      close();
-      handlers.onCancel();
-    }
   });
 }
