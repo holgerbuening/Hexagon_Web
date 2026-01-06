@@ -38,4 +38,9 @@ export class Unit {
   get data() {
     return UNIT_TYPES[this.type];
   }
+
+  public resetForNewTurn(): void {
+    this.remainingMovement = this.data.maxMovement;
+    this.acted = false;
+  }
 }

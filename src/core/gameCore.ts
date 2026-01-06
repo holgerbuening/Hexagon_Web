@@ -54,8 +54,10 @@ export class GameCore {
     const unit = this.getUnitAt(pos);
     if (unit && unit.owner === this.state.currentPlayer) {
       this.state.selectedUnit = unit;
-      this.state.reachableTiles = this.getReachableTilesForUnit(unit);
-      this.state.attackOverlay = this.computeAttackOverlayForUnit(unit);
+      if (!unit.acted){
+        this.state.reachableTiles = this.getReachableTilesForUnit(unit);
+        this.state.attackOverlay = this.computeAttackOverlayForUnit(unit);
+      }
       return null
     } 
 
@@ -65,7 +67,8 @@ export class GameCore {
       const selected=this.state.selectedUnit;
       if (selected) { 
         const moved = this.tryMoveUnitUsingOverlay(selected, pos);
-        if (moved) { 
+        if (moved) {
+          //this.state.selectedUnit.acted = true; 
           this.state.reachableTiles = {};
           this.state.attackOverlay = {};
           return null;
@@ -76,16 +79,16 @@ export class GameCore {
     // 3) Attack: if a unit is selected and we clicked an enemy in range -> open combat dialog
     if (this.state.selectedUnit) {
       const attacker = this.state.selectedUnit;
-      console.log("1. Attacker for combat check:", attacker);
+      //console.log("1. Attacker for combat check:", attacker);
       if (!attacker.acted) {
         const clickedUnit = this.getUnitAt(pos);
         if (clickedUnit && clickedUnit.owner !== attacker.owner) {
-          console.log("2. Clicked unit for combat check:", clickedUnit,"Attack Overlay:", this.state.attackOverlay);
+          //console.log("2. Clicked unit for combat check:", clickedUnit,"Attack Overlay:", this.state.attackOverlay);
           const k = this.key(clickedUnit.q, clickedUnit.r);
           if (this.state.attackOverlay[k]) {
-            console.log("3. Attack valid, computing preview...");
+            //console.log("3. Attack valid, computing preview...");
             const preview = this.computeCombatPreview(attacker, clickedUnit);
-            console.log("4. Combat preview:", preview);
+            //console.log("4. Combat preview:", preview);
             // Clear overlays like in C++ after starting combat
             this.state.reachableTiles = {};
             this.state.attackOverlay = {};
@@ -601,17 +604,10 @@ export class GameCore {
     return result;
   }
 
-
-  private resetUnit(unit: Unit): void {
-    // English comment: Reset remaining movement points to unit type maximum
-    unit.remainingMovement = unit.data.maxMovement;
-    unit.acted = false;
-  }
-
   private resetUnitsOfPlayer(player: PlayerId): void {
     for (const unit of this.state.units) {
       if (unit.owner === player) {
-        this.resetUnit(unit);
+        unit.resetForNewTurn();
       }
     }
   }
@@ -633,16 +629,7 @@ export class GameCore {
     return { q: unit.q, r: unit.r };
   }
 
-  private pendingCombat: CombatRequest | null = null;
-
-  public popCombatRequest(): CombatRequest | null {
-    // English comment: Main loop consumes this once to open the dialog
-    const req = this.pendingCombat;
-    this.pendingCombat = null;
-    return req;
-  }
-
-  public applyCombat(preview: CombatPreview): void {
+   public applyCombat(preview: CombatPreview): void {
     // English comment: Apply combat results only after OK in dialog
 
     const attacker = this.getUnitAt(preview.attackerPos);

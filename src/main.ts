@@ -1,5 +1,6 @@
 import { GameCore } from "./core/gameCore";
 import { pixelToAxial } from "./core/hexMath";
+import type { CombatPreview } from "./core/types";
 import { CanvasRenderer } from "./render/canvasRenderer";
 import { showCombatDialog } from "./ui/combatDialog";
 
@@ -119,27 +120,9 @@ canvas.addEventListener("mouseup", function (ev) {
   const hex = pixelToAxial(world.x, world.y, renderer.getHexSize());
 
   const preview = game.selectHex(hex);
-  console.log("Selected hex:", hex, "Combat preview Main.ts :", preview);
+  //console.log("Selected hex:", hex, "Combat preview Main.ts :", preview);
   if (preview) {
-    
-    if (appRoot) {
-      // We need attacker/defender objects for the header display
-      console.log("AttackerPos:", preview.attackerPos.q, preview.attackerPos.r, "DefenderPos:", preview.defenderPos.q, preview.defenderPos.r);
-      const attacker = game.getUnitAt(preview.attackerPos);
-      const defender = game.getUnitAt(preview.defenderPos);
-      console.log("Attacker:", attacker, "Defender:", defender);
-      if (attacker && defender) {
-        showCombatDialog(appRoot, attacker, defender, preview, {
-          onOk: () => {
-            game.applyCombat(preview);
-            renderAll();
-          },
-          onCancel: () => {
-            renderAll();
-          },
-        });
-      }
-    }
+    combatDialog(preview)
   }
   renderAll();
 });
@@ -349,6 +332,26 @@ function animationLoop(timeMs: number): void {
   }
 
   requestAnimationFrame(animationLoop);
+}
+function combatDialog(preview: CombatPreview): void {
+  if (appRoot) {
+      // We need attacker/defender objects for the header display
+      //console.log("AttackerPos:", preview.attackerPos.q, preview.attackerPos.r, "DefenderPos:", preview.defenderPos.q, preview.defenderPos.r);
+      const attacker = game.getUnitAt(preview.attackerPos);
+      const defender = game.getUnitAt(preview.defenderPos);
+      //console.log("Attacker:", attacker, "Defender:", defender);
+      if (attacker && defender) {
+        showCombatDialog(appRoot, attacker, defender, preview, {
+          onOk: () => {
+            game.applyCombat(preview);
+            renderAll();
+          },
+          onCancel: () => {
+            renderAll();
+          },
+        });
+      }
+    }
 }
 
 // Start loop
