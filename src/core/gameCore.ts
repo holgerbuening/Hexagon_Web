@@ -18,6 +18,7 @@ export class GameCore {
   
   constructor(width: number, height: number) {
     this.tileGrid = [];
+    
     this.state = {
       turn: 1,
       currentPlayer: 0,
@@ -27,8 +28,9 @@ export class GameCore {
       mapHeight: height,
       reachableTiles: {},
       attackOverlay: {},
+      tiles: [],
       //tiles: this.createHexDisk(radius),
-      tiles: this.createBaseMap(width, height),
+      //tiles: this.createBaseMap(width, height),
       units: this.createTestUnits(),
     };
     
@@ -125,32 +127,7 @@ export class GameCore {
       return results;
   }
     
-  private createBaseMap(width: number, height: number): HexTile[] {
-    const tiles: HexTile[] = [];
-    this.tileGrid = [];
-    // 1) Initialize everything as Farmland
-    for (let row = 0; row < height; row++) {
-      const rowArray: HexTile[] = [];
-      this.tileGrid[row] = rowArray;
-
-      for (let col = 0; col < width; col++) {
-        const q = col - Math.floor(row / 2);
-        const r = row;
-        const tile: HexTile = {
-          q: q,
-          r: r,
-          col: col,
-          row: row,
-          field: FieldType.Farmland,
-        };
-        tiles.push(tile);
-        rowArray[col] = tile;
-        
-      }
-    }
-    return tiles;
-  }
-
+  
   private createTestUnits(): Unit[] {
     const units: Unit[] = [];
 
