@@ -47,8 +47,107 @@ canvas:active {
   line-height: 1.35;
 
   /* Let mouse events go through to canvas */
+  /*pointer-events: none;*/
+}
+
+/* Reusable UI panel (dialog look) */
+.uiPanel {
+  position: relative;
+  color: #fff;
+  border-radius: 16px;
+  overflow: hidden;
+
+  /* Background image + fallback */
+  background-color: rgba(0, 0, 0, 0.7);
+  /*background-image: url("/background/combatbackground.png");*/
+  background-size: cover;
+  background-position: center;
+
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+/* Dark overlay to improve text readability */
+.uiPanel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
   pointer-events: none;
 }
+
+/* Ensure content stays above overlay */
+.uiPanel > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* HUD-specific layout */
+.uiPanel--hud {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 260px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  padding: 12px;
+  font-size: 13px;
+}
+
+/* Flag at top */
+.hudFlagWrap {
+  display: flex;
+  justify-content: center;
+}
+
+.hudFlag {
+  width: 84px;
+  height: auto;
+  image-rendering: pixelated; /* looks good for pixel art */
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
+}
+
+/* Body text */
+.hudBody > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  line-height: 1.25;
+}
+
+.hudBody strong {
+  font-weight: 700;
+}
+
+/* Reusable button */
+.uiButton {
+  border: 0;
+  border-radius: 14px;
+  padding: 10px 12px;
+  cursor: pointer;
+
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.2px;
+
+  transition: transform 0.06s ease, filter 0.15s ease;
+}
+
+.uiButton:active {
+  transform: translateY(1px);
+}
+
+.uiButton--ok {
+  background: #19b45a;
+  color: #fff;
+}
+
+.uiButton--ok:hover {
+  filter: brightness(1.08);
+}
+
 
 
 /* ===== Generic dialog overlay ===== */

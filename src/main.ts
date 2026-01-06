@@ -17,6 +17,8 @@ const hudPlayer = document.getElementById("hudPlayer") as HTMLSpanElement;
 const hudSelected = document.getElementById("hudSelected") as HTMLSpanElement;
 const hudUnit = document.getElementById("hudUnit") as HTMLSpanElement;
 const hudZoom = document.getElementById("hudZoom") as HTMLSpanElement;
+const hudFlag = document.getElementById("hudFlag") as HTMLImageElement | null;
+const hudEndTurn = document.getElementById("hudEndTurn") as HTMLButtonElement | null;
 // App root for dialogs
 const appRoot = document.getElementById("app");
 
@@ -28,6 +30,13 @@ if (centerTile) {
   renderer.centerOnAxial(centerTile.q, centerTile.r);
 }
 renderAll();
+// End turn button
+if (hudEndTurn) {
+  hudEndTurn.addEventListener("click", () => {
+    game.endTurn();
+    renderAll();
+  });
+}
 
 // --- Mouse interaction state ---
 let isMouseDown = false;
@@ -160,6 +169,11 @@ function updateHud(): void {
 
   hudTurn.textContent = String(state.turn);
   hudPlayer.textContent = String(state.currentPlayer);
+  if (hudFlag) {
+    // English comment: Update flag image based on current player id
+    hudFlag.src = `flags/player${state.currentPlayer}.png`;
+  }
+
 
   if (state.selectedHex) {
     const tile = game.getTile(state.selectedHex);

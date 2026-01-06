@@ -10,12 +10,22 @@
       <canvas id="game" width="1000" height="700"></canvas>
 
       <!-- HUD overlay -->
-      <div id="hud" class="hud">
-        <div><strong>Turn:</strong> <span id="hudTurn">-</span></div>
-        <div><strong>Player:</strong> <span id="hudPlayer">-</span></div>
-        <div><strong>Selected:</strong> <span id="hudSelected">-</span></div>
-        <div><strong>Selected Unit:</strong> <span id="hudUnit">-</span></div>
-        <div><strong>Zoom:</strong> <span id="hudZoom">-</span></div>
+      <div id="hud" class="hud uiPanel uiPanel--hud">
+        <div class="hudFlagWrap">
+          <img id="hudFlag" class="hudFlag" src="" alt="Current player flag" />
+        </div>
+
+        <div class="hudBody">
+          <div><strong>Turn:</strong> <span id="hudTurn">-</span></div>
+          <div><strong>Player:</strong> <span id="hudPlayer">-</span></div>
+          <div><strong>Selected:</strong> <span id="hudSelected">-</span></div>
+          <div><strong>Selected Unit:</strong> <span id="hudUnit">-</span></div>
+          <div><strong>Zoom:</strong> <span id="hudZoom">-</span></div>
+        </div>
+
+        <button id="hudEndTurn" class="uiButton uiButton--ok" type="button">
+          End Turn
+        </button>
       </div>
     </div>
 
