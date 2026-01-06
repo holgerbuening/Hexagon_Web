@@ -4,6 +4,7 @@ import  { UnitType } from "./units/unitType";
 import { FieldType, getFieldDef } from "./map/fieldTypes";
 import { axialDistance } from "./hexMath";
 import { CombatSystem } from "./systems/combatSystem";
+import { MovementSystem } from "./systems/movementSystem";
 type CombatRequest = {
   attacker: Unit;
   defender: Unit;
@@ -14,6 +15,7 @@ export class GameCore {
   private state: GameState;
   private tileGrid: HexTile[][]; // 2D array for easy access
   private combatSystem: CombatSystem = new CombatSystem();
+  private movementSystem: MovementSystem = new MovementSystem();
   
   constructor(width: number, height: number) {
     this.tileGrid = [];
@@ -57,7 +59,7 @@ export class GameCore {
     if (unit && unit.owner === this.state.currentPlayer) {
       this.state.selectedUnit = unit;
       if (!unit.acted){
-        this.state.reachableTiles = this.getReachableTilesForUnit(unit);
+        this.state.reachableTiles = this.movementSystem.computeReachableTiles(this.state, unit, (q, r) => this.getNeighbors(q, r));
         this.state.attackOverlay = this.computeAttackOverlayForUnit(unit);
       }
       return null
@@ -68,7 +70,7 @@ export class GameCore {
       // Try to move selected unit to clicked tile
       const selected=this.state.selectedUnit;
       if (selected) { 
-        const moved = this.tryMoveUnitUsingOverlay(selected, pos);
+        const moved = this.movementSystem.tryMoveUsingReachable(this.state, selected, pos, this.state.reachableTiles);
         if (moved) {
           //this.state.selectedUnit.acted = true; 
           this.state.reachableTiles = {};
@@ -86,7 +88,7 @@ export class GameCore {
         const clickedUnit = this.getUnitAt(pos);
         if (clickedUnit && clickedUnit.owner !== attacker.owner) {
           //console.log("2. Clicked unit for combat check:", clickedUnit,"Attack Overlay:", this.state.attackOverlay);
-          const k = this.key(clickedUnit.q, clickedUnit.r);
+          const k = MovementSystem.key(clickedUnit.q, clickedUnit.r);
           if (this.state.attackOverlay[k]) {
             //console.log("3. Attack valid, computing preview...");
             const preview = this.combatSystem.computePreview( this.state, attacker, clickedUnit, (pos) => this.getTile(pos));
@@ -425,166 +427,7 @@ export class GameCore {
     }
     return rowArray[col];
   }
-
-  private key(q: number, r: number): string {
-    // English comment: Stable key for maps/sets
-    return `${q},${r}`;
-  }
-
-  private getMovementCost(field: FieldType): number {
-    // English comment: Keep it simple and readable (no clever one-liners)
-    if (field === FieldType.Mountain) return 3;
-    if (field === FieldType.Hills) return 2;
-    if (field === FieldType.Woods) return 2;
-    if (field === FieldType.City) return 1;
-    if (field === FieldType.Industry) return 1;
-    if (field === FieldType.Farmland) return 1;
-    if (field === FieldType.Ocean) return 999; // not passable for infantry
-    return 1;
-  }
-
-  private isPassableForUnit(unit: Unit, tile: HexTile): boolean {
-    // English comment: Infantry can't move on Ocean (for now)
-    if (tile.field === FieldType.Ocean) {
-      return false;
-    }
-    return true;
-  }
-
-  private isOccupied(q: number, r: number): boolean {
-    for (const u of this.state.units) {
-      if (u.q === q && u.r === r) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /**
-   * Dijkstra-lite: compute all reachable tiles under movement points.
-   * - movement cost depends on field
-   * - cannot step onto occupied tiles
-   * - excludes the start tile itself
-   */
-  private getReachableTilesForUnit(unit: Unit): Record<string, number> {
-    const result: Record<string, number> = {};
-
-    const startQ = unit.q;
-    const startR = unit.r;
-
-    const dist = new Map<string, number>();
-    const open: { q: number; r: number; cost: number }[] = [];
-
-    dist.set(this.key(startQ, startR), 0);
-    open.push({ q: startQ, r: startR, cost: 0 });
-
-    while (open.length > 0) {
-      // English comment: pick node with lowest cost (simple O(n) is fine for small maps)
-      if (open.length === 0) {
-        break;
-      }
-
-      const first = open[0];
-      if (!first) {
-        break;
-      }
-
-      let bestIndex = 0;
-      let bestCost = first.cost;
-
-      for (let i = 1; i < open.length; i++) {
-        const candidate = open[i];
-        if (!candidate) {
-          continue;
-        }
-
-        if (candidate.cost < bestCost) {
-          bestCost = candidate.cost;
-          bestIndex = i;
-        }
-      }
-
-      const current = open.splice(bestIndex, 1)[0];
-      if (!current) {
-        continue;
-      }
-
-      const currentKey = this.key(current.q, current.r);
-      const currentBest = dist.get(currentKey);
-      if (currentBest === undefined) {
-        continue;
-      }
-      if (current.cost !== currentBest) {
-        // English comment: outdated entry
-        continue;
-      }
-
-      const neighbors = this.getNeighbors(current.q, current.r);
-      for (const n of neighbors) {
-        if (!this.isPassableForUnit(unit, n)) {
-          continue;
-        }
-
-        // Do not allow moving onto occupied tiles (but allow standing on own start)
-        if (!(n.q === startQ && n.r === startR)) {
-          if (this.isOccupied(n.q, n.r)) {
-            continue;
-          }
-        }
-
-        const stepCost = this.getMovementCost(n.field);
-        const nextCost = current.cost + stepCost;
-
-        if (nextCost > unit.remainingMovement) {
-          continue;
-        }
-
-        const nk = this.key(n.q, n.r);
-        const old = dist.get(nk);
-
-        if (old === undefined || nextCost < old) {
-          dist.set(nk, nextCost);
-          open.push({ q: n.q, r: n.r, cost: nextCost });
-        }
-      }
-    }
-
-    // Collect all reachable tiles except the start tile
-    const startKey = this.key(startQ, startR);
-
-    for (const [k, cost] of dist.entries()) {
-      if (k === startKey) {
-        continue;
-      }
-      result[k] = cost;
-    }
-
-    return result;
-  }
-
-  private tryMoveUnitUsingOverlay(unit: Unit, target: Axial): boolean {
-    const k = this.key(target.q, target.r);
-
-    const cost = this.state.reachableTiles[k];
-    if (cost === undefined) {
-      return false;
-    }
-
-    // Safety checks (optional, but good)
-    if (this.isOccupied(target.q, target.r)) {
-      return false;
-    }
-
-    // Apply move
-    unit.q = target.q;
-    unit.r = target.r;
-
-    // Reduce movement points
-    unit.remainingMovement = unit.remainingMovement - cost;
-
-    return true;
-  }
-
+ 
   private computeAttackOverlayForUnit(unit: Unit): Record<string, true> {
     const result: Record<string, true> = {};
     const range = this.getAttackRangeForUnit(unit);
@@ -599,7 +442,7 @@ export class GameCore {
       const dist = this.hexDistance(origin, targetPos);
 
       if (dist <= range) {
-        result[this.key(other.q, other.r)] = true;
+        result[MovementSystem.key(other.q, other.r)] = true;
       }
     }
 
