@@ -383,6 +383,12 @@ export class CanvasRenderer {
     const img = new Image();
     img.src = "/units/infantry.png";
     this.unitImages.set("infantry", img);
+    const img2 = new Image();
+    img2.src = "/units/militarybase.png";
+    this.unitImages.set("militarybase", img2);
+    const img3 = new Image();
+    img3.src = "/units/machinegun.png";
+    this.unitImages.set("machinegun", img3);
   }
 
   private getFlagImage(owner: PlayerId): HTMLImageElement {

@@ -31,10 +31,11 @@ export class GameCore {
       tiles: [],
       //tiles: this.createHexDisk(radius),
       //tiles: this.createBaseMap(width, height),
-      units: this.createTestUnits(),
+      units: [],
     };
     
     this.createNewMap(width, height);
+    this.setStartUnits();
   }
 
   // Expose immutable view (simple approach for now)
@@ -133,15 +134,17 @@ export class GameCore {
 
     // Player 0 units
     units.push(new Unit(UnitType.Infantry, 2, 2, 0));
-    units.push(new Unit(UnitType.Infantry, 4, 3, 0));
+    units.push(new Unit(UnitType.MachnineGun, 4, 3, 0));
     let unittemp=units[units.length -1];
     if (unittemp) {
-      unittemp.hp = 5; // damage for testing
+      unittemp.hp = 75; // damage for testing
       unittemp.experience = 10;
     }
+    units.push(new Unit(UnitType.MilitaryBase, 3, 2, 0));
     // Player 1 units
     units.push(new Unit(UnitType.Infantry, 7, 7, 1));
-    units.push(new Unit(UnitType.Infantry, 6, 5, 1));
+    units.push(new Unit(UnitType.MachnineGun, 6, 5, 1));
+    units.push(new Unit(UnitType.MilitaryBase, 6, 6, 1));
 
     return units;
   }
@@ -310,6 +313,143 @@ export class GameCore {
     this.state.selectedUnit = null;
     this.state.reachableTiles = {};
     this.state.attackOverlay = {};
+  }
+  private setStartUnits(): void {
+    // English comment: Reset units
+    this.state.units = [];
+
+    const width = this.state.mapWidth;
+    const height = this.state.mapHeight;
+
+    const maxAttempts = width * height;
+
+    const leftMaxColExclusive = Math.floor(width / 3);
+    const rightMinColInclusive = Math.floor((width * 2) / 3);
+
+    // --- Helper: shuffle array in place
+    const shuffleInPlace = <T,>(arr: T[]): void => {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const tmp = arr[i]!;
+        arr[i] = arr[j]!;
+        arr[j] = tmp;
+      }
+    };
+
+    // --- Helper: land check (territory==0 in your old C++ => here: not Ocean)
+    const isLand = (tile: HexTile | undefined): tile is HexTile => {
+      if (!tile) return false;
+      if (tile.field === FieldType.Ocean) return false;
+      return true;
+    };
+
+    // --- Helper: unit occupancy check
+    const isOccupied = (q: number, r: number): boolean => {
+      return this.state.units.some((u) => u.q === q && u.r === r);
+    };
+
+    // --- Helper: BFS land reachability between two axial positions
+    const canReachByLand = (start: Axial, goal: Axial): boolean => {
+      const startTile = this.getTile(start);
+      const goalTile = this.getTile(goal);
+      if (!isLand(startTile) || !isLand(goalTile)) return false;
+
+      const key = (q: number, r: number) => `${q},${r}`;
+      const visited = new Set<string>();
+      const queue: Axial[] = [{ q: start.q, r: start.r }];
+
+      visited.add(key(start.q, start.r));
+
+      while (queue.length > 0) {
+        const cur = queue.shift();
+        if (!cur) continue;
+
+        if (cur.q === goal.q && cur.r === goal.r) return true;
+
+        const neighbors = this.getNeighbors(cur.q, cur.r);
+        for (const n of neighbors) {
+          if (!isLand(n)) continue;
+
+          const k = key(n.q, n.r);
+          if (visited.has(k)) continue;
+
+          visited.add(k);
+          queue.push({ q: n.q, r: n.r });
+        }
+      }
+
+      return false;
+    };
+
+    // --- Helper: find a base position in a col range with >=3 free land neighbors
+    const findBaseAndNeighbors = (
+      owner: PlayerId,
+      colMinInclusive: number,
+      colMaxExclusive: number,
+      mustConnectTo?: Axial
+    ): { base: Axial; neighbors: HexTile[] } | null => {
+      for (let attempts = 0; attempts < maxAttempts; attempts++) {
+        const row = Math.floor(Math.random() * height);
+        const col = Math.floor(Math.random() * (colMaxExclusive - colMinInclusive)) + colMinInclusive;
+
+        const baseTile = this.getTileByColRow(col, row);
+        if (!isLand(baseTile)) continue;
+
+        // Avoid overlap
+        if (isOccupied(baseTile.q, baseTile.r)) continue;
+
+        // Optional: must be land-connected to other base
+        if (mustConnectTo) {
+          if (!canReachByLand({ q: baseTile.q, r: baseTile.r }, mustConnectTo)) continue;
+        }
+
+        // Get neighbors and filter to free land tiles
+        const neigh = this.getNeighbors(baseTile.q, baseTile.r)
+          .filter(isLand)
+          .filter((t) => !isOccupied(t.q, t.r));
+
+        if (neigh.length < 3) continue;
+
+        shuffleInPlace(neigh);
+
+        return {
+          base: { q: baseTile.q, r: baseTile.r },
+          neighbors: neigh,
+        };
+      }
+
+      return null;
+    };
+
+    // --- Place Player 0
+    const p0 = findBaseAndNeighbors(0, 0, leftMaxColExclusive);
+    if (!p0) {
+      throw new Error("Failed to place starting units for Player 0. Create a new map!");
+    }
+    const base0 = p0.base;
+    const neigh0 = p0.neighbors;
+    // English comment: TypeScript safety guard
+    if (!neigh0[0] || !neigh0[1] || !neigh0[2]) {
+      throw new Error("Internal error: not enough neighbors for Player 0 base");
+    }
+    // Place units adjacent to base (2 infantry + 1 machine gun)
+    this.state.units.push(new Unit(UnitType.Infantry, neigh0[0].q, neigh0[0].r, 0));
+    this.state.units.push(new Unit(UnitType.Infantry, neigh0[1].q, neigh0[1].r, 0));
+    this.state.units.push(new Unit(UnitType.MachnineGun, neigh0[2].q, neigh0[2].r, 0));
+    this.state.units.push(new Unit(UnitType.MilitaryBase, base0.q, base0.r, 0));
+
+    // --- Place Player 1 (must be connected by land to p0 base)
+    const p1 = findBaseAndNeighbors(1, rightMinColInclusive, width, p0.base);
+    if (!p1) {
+      throw new Error("Failed to place starting units for Player 1. Create a new map!");
+    }
+     if (!p1.neighbors[0] || !p1.neighbors[1] || !p1.neighbors[2]) {
+      throw new Error("Internal error: not enough neighbors for Player 1 base");
+    }
+    this.state.units.push(new Unit(UnitType.Infantry, p1.neighbors[0].q, p1.neighbors[0].r, 1));
+    this.state.units.push(new Unit(UnitType.Infantry, p1.neighbors[1].q, p1.neighbors[1].r, 1));
+    this.state.units.push(new Unit(UnitType.MachnineGun, p1.neighbors[2].q, p1.neighbors[2].r, 1));
+    this.state.units.push(new Unit(UnitType.MilitaryBase, p1.base.q, p1.base.r, 1));
   }
 
 
