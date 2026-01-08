@@ -16,7 +16,6 @@ export interface HexTile extends Axial {
   row: number
 }
 
-
 export interface GameState {
   turn: number;
   currentPlayer: PlayerId;
@@ -26,6 +25,7 @@ export interface GameState {
   attackOverlay: Record<string, true>;
   tiles: HexTile[];
   units: Unit[];
+  playerBalances: number[];
   mapWidth: number;
   mapHeight: number;
 }
@@ -56,3 +56,8 @@ export type CombatPreview = {
   damageDefender: number;
   damageAttacker: number;
 };
+
+export type SelectHexResult =
+  | { kind: "none" }
+  | { kind: "combat"; preview: CombatPreview }
+  | { kind: "headquarter"; unit: Unit };

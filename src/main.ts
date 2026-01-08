@@ -3,6 +3,8 @@ import { pixelToAxial } from "./core/hexMath";
 import type { CombatPreview } from "./core/types";
 import { CanvasRenderer } from "./render/canvasRenderer";
 import { showCombatDialog } from "./ui/combatDialog";
+import { showHeadquarterDialog } from "./ui/headquarterDialog";
+import type { SelectHexResult } from "./core/types";
 
 const BASE_HEX_SIZE = 64;
 const canvas = document.getElementById("game") as HTMLCanvasElement;
@@ -128,14 +130,18 @@ canvas.addEventListener("mouseup", function (ev) {
   const world = renderer.screenToWorld(sx, sy);
   const hex = pixelToAxial(world.x, world.y, renderer.getHexSize());
 
-  const preview = game.selectHex(hex);
+  const res = game.selectHex(hex);
   //console.log("Selected hex:", hex, "Combat preview Main.ts :", preview);
-  if (preview) {
-    combatDialog(preview)
+  if (res.kind === "combat") {
+    combatDialog( res.preview);
+  } 
+  else if (res.kind === "headquarter") {
+    headquarterDialog( res);
   }
-  renderAll();
+  else {
+    renderAll();
+  }
 });
-
 // Stop dragging if mouse leaves canvas
 canvas.addEventListener("mouseleave", function () {
   isMouseDown = false;
@@ -347,6 +353,7 @@ function animationLoop(timeMs: number): void {
 
   requestAnimationFrame(animationLoop);
 }
+
 function combatDialog(preview: CombatPreview): void {
   if (appRoot) {
       // We need attacker/defender objects for the header display
@@ -364,6 +371,18 @@ function combatDialog(preview: CombatPreview): void {
         });
       }
     }
+}
+
+function headquarterDialog(result: SelectHexResult ): void {
+   const balance = game.getBalance(game.getState().currentPlayer);
+    if (appRoot && result.kind === "headquarter") {
+      showHeadquarterDialog(appRoot, result.unit, {
+        onClose: () => renderAll(),
+      }, { balance });
+    }
+   else {
+    renderAll();
+  }
 }
 
 // Start loop

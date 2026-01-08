@@ -292,3 +292,37 @@ canvas:active {
   box-shadow: none;
 }
 
+/* Headquarter dialog specific */
+.hq-title {
+  margin: 0 0 12px;
+  text-align: center;
+  font-size: 22px;
+}
+
+.hq-top {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.hq-flag {
+  width: 96px;
+  height: auto;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
+}
+
+.hq-info {
+  flex: 1;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.hq-placeholder {
+  font-size: 14px;
+  line-height: 1.4;
+  opacity: 0.9;
+  padding: 10px 0;
+}

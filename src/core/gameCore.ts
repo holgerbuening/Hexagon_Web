@@ -1,4 +1,4 @@
-import { type Axial, type GameState, type HexTile, type PlayerId , type CombatPreview} from "./types";
+import { type Axial, type GameState, type HexTile, type PlayerId , type CombatPreview, type SelectHexResult} from "./types";
 import  { Unit } from "./units/unit";
 import  { UnitType } from "./units/unitType";
 import { FieldType, getFieldDef } from "./map/fieldTypes";
@@ -32,6 +32,7 @@ export class GameCore {
       //tiles: this.createHexDisk(radius),
       //tiles: this.createBaseMap(width, height),
       units: [],
+      playerBalances: [50, 50],
     };
     
     this.createNewMap(width, height);
@@ -44,35 +45,34 @@ export class GameCore {
   }
 
   // Handle click selection
-  public selectHex(pos: Axial): CombatPreview | null {
+  public selectHex(pos: Axial): SelectHexResult  {
     const tile = this.getTile(pos);
     if (!tile) {
       this.clearSelectionAndOverlays(true);
-      return null;
+      return { kind: "none" };
     }
 
     // English comment: Always store last clicked hex
     this.state.selectedHex = { q: tile.q, r: tile.r };
 
     // 1) Friendly unit click -> select unit + overlays
-    if (this.handleFriendlyUnitClick(pos)) {
-      return null;
-    }
+    const friendlyRes = this.handleFriendlyUnitClick(pos);
+    if (friendlyRes) return friendlyRes;
 
     // 2) Move attempt -> if moved, we're done
     if (this.handleMoveAttempt(pos)) {
-      return null;
+      return { kind: "none" };
     }
 
     // 3) Attack attempt -> may return preview
     const preview = this.handleAttackAttempt(pos);
     if (preview) {
-      return preview;
+      return { kind: "combat", preview};
     }
 
     // 4) Nothing useful -> clear overlays + selectedUnit (keep selectedHex)
     this.clearSelectionAndOverlays(false);
-    return null;
+    return { kind: "none" };
   }
 
   public endTurn(): void {
@@ -221,13 +221,23 @@ export class GameCore {
     this.state.attackOverlay = {};
   }
 
-  private handleFriendlyUnitClick(pos: Axial): boolean {
+  private handleFriendlyUnitClick(pos: Axial): SelectHexResult | null{
     const unit = this.getUnitAt(pos);
-    if (!unit) return false;
+    if (!unit) return null;
 
     // English comment: Only react to friendly unit clicks
-    if (unit.owner !== this.state.currentPlayer) return false;
+    if (unit.owner !== this.state.currentPlayer) return null;
 
+     // English comment: If the player clicked their own HQ, return an HQ-event
+    if (unit.type === UnitType.MilitaryBase) {
+      // Clear overlays so UI stays clean
+      this.state.selectedUnit = null;
+      this.state.reachableTiles = {};
+      this.state.attackOverlay = {};
+      return { kind: "headquarter", unit };
+    }
+    
+    
     this.state.selectedUnit = unit;
 
     // English comment: Only show overlays if unit has not acted yet
@@ -244,7 +254,7 @@ export class GameCore {
       this.state.attackOverlay = {};
     }
 
-    return true;
+    return { kind: "none" };
   }
 
   private handleMoveAttempt(pos: Axial): boolean {
@@ -314,6 +324,26 @@ export class GameCore {
     this.state.reachableTiles = {};
     this.state.attackOverlay = {};
   }
+
+  public getBalance(player: number): number {
+    return this.state.playerBalances[player] ?? 0;
+  }
+
+  public addBalance(player: number, amount: number): void {
+    const old = this.getBalance(player);
+    this.state.playerBalances[player] = old + amount;
+  }
+
+  public canAfford(player: number, cost: number): boolean {
+    return this.getBalance(player) >= cost;
+  }
+
+  public spend(player: number, cost: number): boolean {
+    if (!this.canAfford(player, cost)) return false;
+    this.state.playerBalances[player] = this.getBalance(player) - cost;
+    return true;
+  }
+
   private setStartUnits(): void {
     // English comment: Reset units
     this.state.units = [];
