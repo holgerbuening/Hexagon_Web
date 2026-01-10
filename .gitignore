@@ -4,7 +4,7 @@ dist/
 .vite/
 
 # save game files
-hexagon-save/
+hexagon_save/
 
 # Logs
 npm-debug.log*
