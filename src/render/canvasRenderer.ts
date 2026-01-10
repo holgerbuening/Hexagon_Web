@@ -380,15 +380,30 @@ export class CanvasRenderer {
   }
 
   private loadUnitSprites(): void {
-    const img = new Image();
+    let img = new Image();
     img.src = "/units/infantry.png";
     this.unitImages.set("infantry", img);
-    const img2 = new Image();
-    img2.src = "/units/militarybase.png";
-    this.unitImages.set("militarybase", img2);
-    const img3 = new Image();
-    img3.src = "/units/machinegun.png";
-    this.unitImages.set("machinegun", img3);
+    img = new Image();
+    img.src = "/units/militarybase.png";
+    this.unitImages.set("militarybase", img);
+    img = new Image();
+    img.src = "/units/machinegun.png";
+    this.unitImages.set("machinegun", img);
+    img = new Image();
+    img.src = "/units/medic.png";
+    this.unitImages.set("medic", img);
+    img = new Image();
+    img.src = "/units/artillery.png";
+    this.unitImages.set("artillery", img);
+    img = new Image();
+    img.src = "/units/cavalry.png";
+    this.unitImages.set("cavalry", img);
+    img = new Image();
+    img.src = "/units/tank.png";
+    this.unitImages.set("tank", img);
+    img = new Image();
+    img.src = "/units/engineer.png";
+    this.unitImages.set("engineer", img);
   }
 
   private getFlagImage(owner: PlayerId): HTMLImageElement {

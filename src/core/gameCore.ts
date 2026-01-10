@@ -464,7 +464,7 @@ export class GameCore {
     }
     // Place units adjacent to base (2 infantry + 1 machine gun)
     this.state.units.push(new Unit(UnitType.Infantry, neigh0[0].q, neigh0[0].r, 0));
-    this.state.units.push(new Unit(UnitType.Infantry, neigh0[1].q, neigh0[1].r, 0));
+    this.state.units.push(new Unit(UnitType.Cavalry, neigh0[1].q, neigh0[1].r, 0));
     this.state.units.push(new Unit(UnitType.MachnineGun, neigh0[2].q, neigh0[2].r, 0));
     this.state.units.push(new Unit(UnitType.MilitaryBase, base0.q, base0.r, 0));
 
@@ -477,7 +477,7 @@ export class GameCore {
       throw new Error("Internal error: not enough neighbors for Player 1 base");
     }
     this.state.units.push(new Unit(UnitType.Infantry, p1.neighbors[0].q, p1.neighbors[0].r, 1));
-    this.state.units.push(new Unit(UnitType.Infantry, p1.neighbors[1].q, p1.neighbors[1].r, 1));
+    this.state.units.push(new Unit(UnitType.Cavalry, p1.neighbors[1].q, p1.neighbors[1].r, 1));
     this.state.units.push(new Unit(UnitType.MachnineGun, p1.neighbors[2].q, p1.neighbors[2].r, 1));
     this.state.units.push(new Unit(UnitType.MilitaryBase, p1.base.q, p1.base.r, 1));
   }
