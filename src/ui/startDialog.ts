@@ -5,7 +5,28 @@ type StartDialogOptions = {
   onLoad: () => void;
 };
 
+  function requestFullscreen(): void {
+    const root = document.documentElement;
+    if (!root.requestFullscreen) {
+      return;
+    }
+    void root.requestFullscreen().catch((error) => {
+      console.warn("Failed to enter fullscreen mode.", error);
+    });
+  }
+
+  function exitFullscreen(): void {
+    if (!document.fullscreenElement || !document.exitFullscreen) {
+      return;
+    }
+    void document.exitFullscreen().catch((error) => {
+      console.warn("Failed to exit fullscreen mode.", error);
+    });
+  }
+
 export function showStartDialog(appRoot: HTMLElement, options: StartDialogOptions): void {
+  exitFullscreen();
+
   const overlay = document.createElement("div");
   overlay.className = "dialog-overlay start-dialog-overlay";
 
@@ -24,6 +45,7 @@ export function showStartDialog(appRoot: HTMLElement, options: StartDialogOption
 
   resumeButton.addEventListener("click", () => {
     overlay.remove();
+    requestFullscreen();
     options.onResume();
   });
 
@@ -34,6 +56,7 @@ export function showStartDialog(appRoot: HTMLElement, options: StartDialogOption
 
   startButton.addEventListener("click", () => {
     overlay.remove();
+    requestFullscreen();
     options.onStartNew();
   });
 
