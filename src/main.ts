@@ -1,10 +1,10 @@
 import { GameCore } from "./core/gameCore";
 import { pixelToAxial } from "./core/hexMath";
-import type { CombatPreview } from "./core/types";
+import type { CombatPreview, SelectHexResult} from "./core/types";
 import { CanvasRenderer } from "./render/canvasRenderer";
 import { showCombatDialog } from "./ui/combatDialog";
 import { showHeadquarterDialog } from "./ui/headquarterDialog";
-import type { SelectHexResult } from "./core/types";
+import { PLAYER_NAMES } from "./core/types";
 
 const BASE_HEX_SIZE = 64;
 const canvas = document.getElementById("game") as HTMLCanvasElement;
@@ -174,7 +174,8 @@ function updateHud(): void {
   const state = game.getState();
 
   hudTurn.textContent = String(state.turn);
-  hudPlayer.textContent = String(state.currentPlayer);
+  hudPlayer.textContent = PLAYER_NAMES[state.currentPlayer];
+  
   if (hudFlag) {
     // English comment: Update flag image based on current player id
     hudFlag.src = `flags/player${state.currentPlayer}.png`;

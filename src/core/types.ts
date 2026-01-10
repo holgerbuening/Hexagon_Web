@@ -5,6 +5,13 @@ import { FieldType } from "./map/fieldTypes";
 
 export type PlayerId = 0 | 1;
 
+export const PLAYER_NAMES: Record<PlayerId, string> = {
+  0: "Lupony",
+  1: "Ursony"
+};
+
+
+
 export interface Axial {
   q: number;
   r: number;

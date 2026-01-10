@@ -1,4 +1,5 @@
 import type { Unit } from "../core/units/unit";
+import { PLAYER_NAMES } from "../core/types";
 import { UNIT_TYPES, UnitType } from "../core/units/unitType";
 
 type HeadquarterDialogHandlers = {
@@ -65,7 +66,7 @@ export function showHeadquarterDialog(
 
   const bal = options.balance;
   infoBox.appendChild(createRow("Balance", bal !== undefined ? String(bal) : "—"));
-  infoBox.appendChild(createRow("Owner", `Player ${hqUnit.owner}`));
+  infoBox.appendChild(createRow("Owner", PLAYER_NAMES[hqUnit.owner]));
   infoBox.appendChild(createRow("HQ HP", `${hqUnit.hp}/${hqUnit.maxHP}`));
   top.appendChild(infoBox);
 
@@ -123,6 +124,7 @@ export function showHeadquarterDialog(
   let buyBtn: HTMLButtonElement | null = null;
 
   function setPreview(unitType: UnitType): void {
+    selectedUnitType = unitType;
     const data = UNIT_TYPES[unitType];
     previewImage.src = `/units/${data.spriteKey}.png`;
     previewImage.alt = `${data.name} preview`;
