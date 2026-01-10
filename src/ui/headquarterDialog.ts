@@ -3,6 +3,7 @@ import { UNIT_TYPES, UnitType } from "../core/units/unitType";
 
 type HeadquarterDialogHandlers = {
   onClose: () => void;
+  onBuy: (unitType: UnitType) => void;
 };
 
 type HeadquarterDialogOptions = {
@@ -118,6 +119,8 @@ export function showHeadquarterDialog(
   rightCol.appendChild(previewCard);
 
   const unitItems = new Map<UnitType, HTMLLIElement>();
+  let selectedUnitType = purchasableUnits[0];
+  let buyBtn: HTMLButtonElement | null = null;
 
   function setPreview(unitType: UnitType): void {
     const data = UNIT_TYPES[unitType];
@@ -134,6 +137,8 @@ export function showHeadquarterDialog(
     if (activeItem) {
       activeItem.classList.add("hq-unit-item--active");
     }
+
+    updateBuyButtonState();
   }
 
   purchasableUnits.forEach((unitType) => {
@@ -171,10 +176,15 @@ export function showHeadquarterDialog(
   const footer = document.createElement("div");
   footer.className = "dialog-footer";
 
-  const closeBtn = document.createElement("button");
-  closeBtn.className = "dialog-button";
-  closeBtn.textContent = "OK";
-  footer.appendChild(closeBtn);
+  const cancelBtn = document.createElement("button");
+  cancelBtn.className = "dialog-button";
+  cancelBtn.textContent = "Cancel";
+  footer.appendChild(cancelBtn);
+
+  buyBtn = document.createElement("button");
+  buyBtn.className = "dialog-button";
+  buyBtn.textContent = "Buy";
+  footer.appendChild(buyBtn);
 
   content.appendChild(footer);
 
@@ -198,8 +208,30 @@ export function showHeadquarterDialog(
 
   window.addEventListener("keydown", onKeyDown);
 
-  closeBtn.addEventListener("click", () => {
+  function updateBuyButtonState(): void {
+    if (selectedUnitType !== undefined) {
+      const data = UNIT_TYPES[selectedUnitType];
+      if (bal === undefined) {
+        if (buyBtn) {
+          buyBtn.disabled = true;
+        }
+        return;
+      }
+      if (buyBtn) {
+        buyBtn.disabled = bal < data.price;
+      }
+    }
+  }
+  updateBuyButtonState();
+  cancelBtn.addEventListener("click", () => {
     close();
     handlers.onClose();
+  });
+
+    buyBtn.addEventListener("click", () => {
+    if (!buyBtn || buyBtn.disabled) return;
+    close();
+    if (selectedUnitType === undefined) return;
+    handlers.onBuy(selectedUnitType);
   });
 }

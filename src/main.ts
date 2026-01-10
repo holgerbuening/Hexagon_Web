@@ -374,12 +374,16 @@ function combatDialog(preview: CombatPreview): void {
 }
 
 function headquarterDialog(result: SelectHexResult ): void {
-   const balance = game.getBalance(game.getState().currentPlayer);
-    if (appRoot && result.kind === "headquarter") {
-      showHeadquarterDialog(appRoot, result.unit, {
-        onClose: () => renderAll(),
-      }, { balance });
-    }
+  const balance = game.getBalance(game.getState().currentPlayer);
+  if (appRoot && result.kind === "headquarter") { 
+    showHeadquarterDialog(appRoot, result.unit, {
+      onClose: () => renderAll(),
+      onBuy: (unitType) => {
+      game.beginPurchase(result.unit, unitType);
+      renderAll();
+    },
+   }, { balance });
+  }
    else {
     renderAll();
   }

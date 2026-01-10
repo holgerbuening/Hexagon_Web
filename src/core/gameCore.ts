@@ -1,12 +1,12 @@
 import { type Axial, type GameState, type HexTile, type PlayerId , type CombatPreview, type SelectHexResult} from "./types";
 import  { Unit } from "./units/unit";
 import  { UnitType } from "./units/unitType";
+import { UNIT_TYPES } from "./units/unitType";
 import { FieldType, getFieldDef } from "./map/fieldTypes";
 import { axialDistance } from "./hexMath";
 import { CombatSystem } from "./systems/combatSystem";
 import { MovementSystem } from "./systems/movementSystem";
 import { MapGenerator } from "./map/mapGenerator";
-
 
 // Main game logic container (no rendering here)
 export class GameCore {
@@ -17,6 +17,7 @@ export class GameCore {
   private mapGenerator: MapGenerator = new MapGenerator();
   private aiPlayer: PlayerId | null = null;
   private aiDifficultyMultiplier: number = 1.0; // 1.0 = normal, >1.0 = harder AI
+  private pendingPurchase: { unitType: UnitType; owner: PlayerId } | null = null;
   
   constructor(width: number, height: number) {
     this.tileGrid = [];
@@ -48,6 +49,9 @@ export class GameCore {
 
   // Handle click selection
   public selectHex(pos: Axial): SelectHexResult  {
+    if (this.handlePurchasePlacement(pos)) {
+      return { kind: "none" };
+    }
     const tile = this.getTile(pos);
     if (!tile) {
       this.clearSelectionAndOverlays(true);
@@ -81,6 +85,7 @@ export class GameCore {
     this.resetUnitsOfPlayer(this.state.currentPlayer);
     this.applyTurnIncome(this.state.currentPlayer);
     this.state.turn += 1;
+    this.cancelPurchase();
     this.togglePlayer();
     this.state.selectedHex = null;
     this.state.selectedUnit = null;
@@ -344,6 +349,42 @@ export class GameCore {
   public spend(player: number, cost: number): boolean {
     if (!this.canAfford(player, cost)) return false;
     this.state.playerBalances[player] = this.getBalance(player) - cost;
+    return true;
+  }
+  public beginPurchase(hqUnit: Unit, unitType: UnitType): void {
+    this.pendingPurchase = { unitType, owner: hqUnit.owner };
+    this.state.selectedUnit = null;
+    this.state.attackOverlay = {};
+
+    const probeUnit = new Unit(unitType, hqUnit.q, hqUnit.r, hqUnit.owner);
+    this.state.reachableTiles = this.movementSystem.computeReachableTiles(
+      this.state,
+      probeUnit,
+      (q, r) => this.getNeighbors(q, r)
+    );
+  }
+
+  public cancelPurchase(): void {
+    this.pendingPurchase = null;
+    this.state.reachableTiles = {};
+  }
+
+  private handlePurchasePlacement(pos: Axial): boolean {
+    if (!this.pendingPurchase) return false;
+    const k = MovementSystem.key(pos.q, pos.r);
+    if (this.state.reachableTiles[k] === undefined) return false;
+
+    const { unitType, owner } = this.pendingPurchase;
+    const cost = UNIT_TYPES[unitType].price;
+    if (!this.spend(owner, cost)) {
+      this.cancelPurchase();
+      return false;
+    }
+
+    this.state.units.push(new Unit(unitType, pos.q, pos.r, owner));
+    this.pendingPurchase = null;
+    this.state.reachableTiles = {};
+    this.state.selectedHex = { q: pos.q, r: pos.r };
     return true;
   }
 
