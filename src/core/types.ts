@@ -19,6 +19,7 @@ export interface HexTile extends Axial {
   field: FieldType;
   col: number
   row: number
+  hasRoad: boolean;
 }
 
 export interface GameState {

@@ -28,6 +28,7 @@ export class CanvasRenderer {
   // Tile image storage
   private tileImages: Map<FieldType, HTMLImageElement>;
   private tileImagesLoaded: boolean;
+  private roadImages: Map<string, HTMLImageElement>;
 
   // Unit, flag, and rank image storage
   private unitImages: Map<string, HTMLImageElement>;
@@ -53,8 +54,10 @@ export class CanvasRenderer {
 
     this.tileImages = new Map<FieldType, HTMLImageElement>();
     this.tileImagesLoaded = false;
+    this.roadImages = new Map<string, HTMLImageElement>();
     this.invalidateHandler = null;
     this.loadTileImages();
+    this.loadRoadImages();
     this.unitImages = new Map<string, HTMLImageElement>();
     this.loadUnitSprites();
   }
@@ -69,6 +72,7 @@ export class CanvasRenderer {
       const isSelected = tileMatches(state.selectedHex, tile);
       this.drawTile(tile, isSelected);
     }
+    this.drawRoads(state);
     // Draw movement overlay (yellow) BEFORE selected overlay (green)
     const keys = Object.keys(state.reachableTiles);
     for (const k of keys) {
@@ -210,6 +214,42 @@ export class CanvasRenderer {
       this.ctx.strokeStyle = "#333333";
       this.ctx.stroke();
     }
+  }
+
+  private drawRoads(state: Readonly<GameState>): void {
+    const roadTiles = state.tiles.filter((tile) => tile.hasRoad);
+    if (roadTiles.length === 0) return;
+
+    const roadKeys = new Set(roadTiles.map((tile) => MovementKey(tile.q, tile.r)));
+    const directions = [
+      { dq: 1, dr: 0, index: 0 },
+      { dq: 0, dr: 1, index: 1 },
+      { dq: -1, dr: 1, index: 2 },
+      { dq: -1, dr: 0, index: 3 },
+      { dq: 0, dr: -1, index: 4 },
+      { dq: 1, dr: -1, index: 5 },
+    ];
+
+    for (const tile of roadTiles) {
+      const p = axialToPixel(tile.q, tile.r, this.size);
+      this.drawRoadImage("center", p.x, p.y);
+
+      for (const dir of directions) {
+        const neighborKey = MovementKey(tile.q + dir.dq, tile.r + dir.dr);
+        if (!roadKeys.has(neighborKey)) continue;
+        this.drawRoadImage(String(dir.index), p.x, p.y);
+      }
+    }
+  }
+
+  private drawRoadImage(key: string, x: number, y: number): void {
+    const img = this.roadImages.get(key);
+    if (!img || !img.complete || img.naturalWidth === 0) return;
+
+    const scale = 1.1;
+    const destH = (2 * this.size) * scale;
+    const destW = destH * (img.naturalWidth / img.naturalHeight);
+    this.ctx.drawImage(img, x - destW / 2, y - destH / 2, destW, destH);
   }
 
   private getTileFillColor(field: FieldType): string {
@@ -368,6 +408,13 @@ export class CanvasRenderer {
     this.addTileImage(FieldType.Industry, "/tiles/industry.png");
   }
 
+  private loadRoadImages(): void {
+    this.addRoadImage("center", "/roads/roadcenter.png");
+    for (let i = 0; i < 6; i += 1) {
+      this.addRoadImage(String(i), `/roads/road${i}.png`);
+    }
+  }
+
   private addTileImage(field: FieldType, url: string): void {
     const img = new Image();
 
@@ -377,6 +424,13 @@ export class CanvasRenderer {
 
     img.src = url;
     this.tileImages.set(field, img);
+  }
+  private addRoadImage(key: string, url: string): void {
+    const img = new Image();
+    img.onload = this.handleAssetLoaded.bind(this);
+    img.onerror = this.handleAssetLoaded.bind(this);
+    img.src = url;
+    this.roadImages.set(key, img);
   }
 
   private loadUnitSprites(): void {
@@ -530,3 +584,6 @@ function tileMatches(a: Axial | null, b: Axial): boolean {
   return a.q === b.q && a.r === b.r;
 }
 
+function MovementKey(q: number, r: number): string {
+  return `${q},${r}`;
+}

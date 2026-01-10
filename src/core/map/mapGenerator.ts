@@ -25,6 +25,7 @@ export class MapGenerator {
           col,
           row,
           field: FieldType.Farmland,
+          hasRoad: false,
         };
 
         rowArr.push(tile);

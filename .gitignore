@@ -5,6 +5,7 @@ dist/
 
 # save game files
 hexagon_save/
+Roads.xcf
 
 # Logs
 npm-debug.log*

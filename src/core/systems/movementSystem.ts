@@ -21,7 +21,13 @@ export class MovementSystem {
     return true;
   }
 
-  private getMovementCost(field: FieldType): number {
+  private getMovementCost(tile: HexTile): number {
+    // English comment: Keep it simple and readable (no clever one-liners)
+    if (tile.hasRoad) return Math.floor(this.getFieldCost(tile.field) / 2);
+    return this.getFieldCost(tile.field);
+  }
+
+  private getFieldCost(field: FieldType): number {
     // English comment: Keep it simple and readable (no clever one-liners)
     if (field === FieldType.Mountain) return 3;
     if (field === FieldType.Hills) return 2;
@@ -89,7 +95,7 @@ export class MovementSystem {
         const isStart = n.q === startQ && n.r === startR;
         if (!isStart && this.isOccupied(state, n.q, n.r)) continue;
 
-        const stepCost = this.getMovementCost(n.field);
+        const stepCost = this.getMovementCost(n);
         const nextCost = current.cost + stepCost;
 
         if (nextCost > unit.remainingMovement) continue;

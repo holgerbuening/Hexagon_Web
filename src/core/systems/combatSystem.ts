@@ -1,6 +1,6 @@
 import type { Axial, CombatPreview, GameState, HexTile } from "../types";
 import { axialDistance } from "../hexMath";
-import { getFieldDef } from "../map/fieldTypes";
+import { FieldType,getFieldDef } from "../map/fieldTypes";
 import type { Unit } from "../units/unit";
 import { MovementSystem } from "./movementSystem";
 
@@ -170,5 +170,24 @@ export class CombatSystem {
     }
 
     return result;
-  }   
+  } 
+    
+  public computeEngineerRoadOverlay(state: GameState, unit: Unit): Record<string, true> {
+    const result: Record<string, true> = {};
+    const range = unit.data.attackRange;
+    const origin: Axial = { q: unit.q, r: unit.r };
+
+    for (const tile of state.tiles) {
+      if (tile.field === FieldType.Ocean) continue;
+      if (tile.hasRoad) continue;
+      if (this.getUnitAt(state, { q: tile.q, r: tile.r })) continue;
+
+      const dist = axialDistance(origin, { q: tile.q, r: tile.r });
+      if (dist <= range) {
+        result[MovementSystem.key(tile.q, tile.r)] = true;
+      }
+    }
+
+    return result;
+  }
 }

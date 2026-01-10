@@ -11,7 +11,6 @@ import  { Unit } from "./units/unit";
 import  { UnitType } from "./units/unitType";
 import { UNIT_TYPES } from "./units/unitType";
 import { FieldType, getFieldDef } from "./map/fieldTypes";
-import { axialDistance } from "./hexMath";
 import { CombatSystem } from "./systems/combatSystem";
 import { MovementSystem } from "./systems/movementSystem";
 import { MapGenerator } from "./map/mapGenerator";
@@ -86,22 +85,27 @@ export class GameCore {
       return { kind: "none" };
     }
 
-    // 2) Friendly unit click -> select unit + overlays
+    // 2) Engineer road attempt -> build road if in range
+    if (this.handleEngineerBuildAttempt(pos)) {
+      return { kind: "none" };
+    }
+
+    // 3) Friendly unit click -> select unit + overlays
     const friendlyRes = this.handleFriendlyUnitClick(pos);
     if (friendlyRes) return friendlyRes;
 
-    // 3) Move attempt -> if moved, we're done
+    // 4) Move attempt -> if moved, we're done
     if (this.handleMoveAttempt(pos)) {
       return { kind: "none" };
     }
 
-    // 4) Attack attempt -> may return preview
+    // 5) Attack attempt -> may return preview
     const preview = this.handleAttackAttempt(pos);
     if (preview) {
       return { kind: "combat", preview};
     }
 
-    // 5) Nothing useful -> clear overlays + selectedUnit (keep selectedHex)
+    // 6) Nothing useful -> clear overlays + selectedUnit (keep selectedHex)
     this.clearSelectionAndOverlays(false);
     return { kind: "none" };
   }
@@ -280,12 +284,13 @@ export class GameCore {
         unit,
         (q, r) => this.getNeighbors(q, r)
       );
-
-    if (unit.type === UnitType.Medic) {
-      this.state.attackOverlay = this.combatSystem.computeHealOverlayForUnit(this.state, unit);
-    } else {
-      this.state.attackOverlay = this.combatSystem.computeAttackOverlayForUnit(this.state, unit);
-    }
+      if (unit.type === UnitType.Medic) {
+        this.state.attackOverlay = this.combatSystem.computeHealOverlayForUnit(this.state, unit);
+      } else if (unit.type === UnitType.Engineer) {
+        this.state.attackOverlay = this.combatSystem.computeEngineerRoadOverlay(this.state, unit);
+      } else {
+        this.state.attackOverlay = this.combatSystem.computeAttackOverlayForUnit(this.state, unit);
+      }   
     } else {
       this.state.reachableTiles = {};
       this.state.attackOverlay = {};
@@ -293,7 +298,7 @@ export class GameCore {
 
     return { kind: "none" };
   }
-  
+
   private handleHealAttempt(pos: Axial): boolean {
     const healer = this.state.selectedUnit;
     if (!healer) return false;
@@ -315,6 +320,28 @@ export class GameCore {
       healer.acted = true;
     }
 
+    this.clearSelectionAndOverlays(false);
+    return true;
+  }
+
+  private handleEngineerBuildAttempt(pos: Axial): boolean {
+    const engineer = this.state.selectedUnit;
+    if (!engineer) return false;
+    if (engineer.type !== UnitType.Engineer) return false;
+    if (engineer.acted) return false;
+
+    const tile = this.getTile(pos);
+    if (!tile) return false;
+    if (!this.isRoadBuildableTile(tile)) return false;
+
+    const k = MovementSystem.key(tile.q, tile.r);
+    if (!this.state.attackOverlay[k]) return false;
+
+    const cost = 20;
+    if (!this.spend(engineer.owner, cost)) return false;
+
+    tile.hasRoad = true;
+    engineer.acted = true;
     this.clearSelectionAndOverlays(false);
     return true;
   }
@@ -342,6 +369,7 @@ export class GameCore {
   private handleAttackAttempt(pos: Axial): CombatPreview | null {
     const attacker = this.state.selectedUnit;
     if (!attacker) return null;
+    if (attacker.type === UnitType.Engineer) return null;
 
     // English comment: Attacker must be able to act
     if (attacker.acted) return null;
@@ -369,6 +397,12 @@ export class GameCore {
     this.state.selectedUnit = null;
 
     return preview;
+  }
+
+  private isRoadBuildableTile(tile: HexTile): boolean {
+    if (tile.field === FieldType.Ocean) return false;
+    if (tile.hasRoad) return false;
+    return !this.getUnitAt(tile);
   }
 
   public createNewMap(width: number, height: number): void {

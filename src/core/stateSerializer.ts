@@ -24,7 +24,10 @@ export function deserializeState(saved: SavedGameState): DeserializedState {
     throw new Error(`Unsupported save version: ${saved.version}`);
   }
 
-  const tiles = saved.tiles.map((tile) => ({ ...tile }));
+  const tiles = saved.tiles.map((tile) => ({
+    ...tile,
+    hasRoad: tile.hasRoad ?? false,
+  }));
   const units = saved.units.map((unit) => Unit.fromSaved(unit));
 
   const state: GameState = {
