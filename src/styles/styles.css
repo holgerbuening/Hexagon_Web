@@ -346,6 +346,15 @@ canvas:active {
   background: rgba(0, 0, 0, 0.35);
 }
 
+.hq-unit-item--active {
+  border-color: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15);
+}
+
+.hq-unit-item:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
 .hq-unit-name {
   font-weight: 600;
 }
@@ -355,3 +364,25 @@ canvas:active {
   opacity: 0.9;
 }
 
+
+.hq-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.hq-preview-image {
+  width: 140px;
+  height: auto;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
+}
+
+.hq-preview-stats {
+  width: 100%;
+}

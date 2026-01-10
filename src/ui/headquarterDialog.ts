@@ -94,6 +94,48 @@ export function showHeadquarterDialog(
     UnitType.Tank
   ];
 
+  leftCol.appendChild(unitList);
+
+  const rightCol = document.createElement("div");
+  rightCol.className = "dialog-column";
+
+  const rightH = document.createElement("h3");
+  rightH.textContent = "Preview";
+  rightCol.appendChild(rightH);
+
+    const previewCard = document.createElement("div");
+  previewCard.className = "hq-preview";
+
+  const previewImage = document.createElement("img");
+  previewImage.className = "hq-preview-image";
+  previewImage.alt = "unit preview";
+  previewCard.appendChild(previewImage);
+
+  const previewStats = document.createElement("div");
+  previewStats.className = "hq-preview-stats";
+  previewCard.appendChild(previewStats);
+
+  rightCol.appendChild(previewCard);
+
+  const unitItems = new Map<UnitType, HTMLLIElement>();
+
+  function setPreview(unitType: UnitType): void {
+    const data = UNIT_TYPES[unitType];
+    previewImage.src = `/units/${data.spriteKey}.png`;
+    previewImage.alt = `${data.name} preview`;
+
+    previewStats.innerHTML = "";
+    previewStats.appendChild(createRow("Movement", String(data.maxMovement)));
+    previewStats.appendChild(createRow("Offense", String(data.offense)));
+    previewStats.appendChild(createRow("Defense", String(data.defense)));
+
+    unitItems.forEach((item) => item.classList.remove("hq-unit-item--active"));
+    const activeItem = unitItems.get(unitType);
+    if (activeItem) {
+      activeItem.classList.add("hq-unit-item--active");
+    }
+  }
+
   purchasableUnits.forEach((unitType) => {
     const data = UNIT_TYPES[unitType];
     const item = document.createElement("li");
@@ -110,26 +152,20 @@ export function showHeadquarterDialog(
     item.appendChild(name);
     item.appendChild(price);
     unitList.appendChild(item);
+    unitItems.set(unitType, item);
+
+    item.addEventListener("click", () => setPreview(unitType));
   });
 
   leftCol.appendChild(unitList);
 
-  const rightCol = document.createElement("div");
-  rightCol.className = "dialog-column";
-
-  const rightH = document.createElement("h3");
-  rightH.textContent = "Preview";
-  rightCol.appendChild(rightH);
-
-  const placeholderPreview = document.createElement("div");
-  placeholderPreview.className = "hq-placeholder";
-  placeholderPreview.textContent =
-    "Hier kommt später die große Unit-Vorschau rein (wie in der C++-Version).";
-  rightCol.appendChild(placeholderPreview);
-
   cols.appendChild(leftCol);
   cols.appendChild(rightCol);
   content.appendChild(cols);
+  
+  if (purchasableUnits[0]!==undefined) {
+    setPreview(purchasableUnits[0]);
+  }
 
   // Footer: only Close button for now
   const footer = document.createElement("div");
