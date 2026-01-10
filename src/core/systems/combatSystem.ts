@@ -150,5 +150,25 @@ export class CombatSystem {
 
     return result;
   }
-   
+
+  public computeHealOverlayForUnit(state: GameState, unit: Unit): Record<string, true> {
+    // English comment: Returns a map of friendly unit positions within heal range
+    const result: Record<string, true> = {};
+    const range = unit.data.attackRange;
+    const origin: Axial = { q: unit.q, r: unit.r };
+
+    for (const other of state.units) {
+      if (other.owner !== unit.owner) continue;
+      if (other === unit) continue;
+
+      const target: Axial = { q: other.q, r: other.r };
+      const dist = axialDistance(origin, target);
+
+      if (dist <= range) {
+        result[MovementSystem.key(other.q, other.r)] = true;
+      }
+    }
+
+    return result;
+  }   
 }

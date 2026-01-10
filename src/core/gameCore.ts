@@ -81,22 +81,27 @@ export class GameCore {
     // English comment: Always store last clicked hex
     this.state.selectedHex = { q: tile.q, r: tile.r };
 
-    // 1) Friendly unit click -> select unit + overlays
+    // 1) Medic heal attempt -> heal friendly if in range
+    if (this.handleHealAttempt(pos)) {
+      return { kind: "none" };
+    }
+
+    // 2) Friendly unit click -> select unit + overlays
     const friendlyRes = this.handleFriendlyUnitClick(pos);
     if (friendlyRes) return friendlyRes;
 
-    // 2) Move attempt -> if moved, we're done
+    // 3) Move attempt -> if moved, we're done
     if (this.handleMoveAttempt(pos)) {
       return { kind: "none" };
     }
 
-    // 3) Attack attempt -> may return preview
+    // 4) Attack attempt -> may return preview
     const preview = this.handleAttackAttempt(pos);
     if (preview) {
       return { kind: "combat", preview};
     }
 
-    // 4) Nothing useful -> clear overlays + selectedUnit (keep selectedHex)
+    // 5) Nothing useful -> clear overlays + selectedUnit (keep selectedHex)
     this.clearSelectionAndOverlays(false);
     return { kind: "none" };
   }
@@ -276,13 +281,42 @@ export class GameCore {
         (q, r) => this.getNeighbors(q, r)
       );
 
+    if (unit.type === UnitType.Medic) {
+      this.state.attackOverlay = this.combatSystem.computeHealOverlayForUnit(this.state, unit);
+    } else {
       this.state.attackOverlay = this.combatSystem.computeAttackOverlayForUnit(this.state, unit);
+    }
     } else {
       this.state.reachableTiles = {};
       this.state.attackOverlay = {};
     }
 
     return { kind: "none" };
+  }
+  
+  private handleHealAttempt(pos: Axial): boolean {
+    const healer = this.state.selectedUnit;
+    if (!healer) return false;
+    if (healer.type !== UnitType.Medic) return false;
+    if (healer.acted) return false;
+
+    const target = this.getUnitAt(pos);
+    if (!target) return false;
+    if (target.owner !== healer.owner) return false;
+    if (target === healer) return false;
+
+    const k = MovementSystem.key(target.q, target.r);
+    if (!this.state.attackOverlay[k]) return false;
+
+    const healedHp = Math.min(target.maxHP, target.hp + 50);
+    if (healedHp !== target.hp) {
+      target.hp = healedHp;
+      healer.experience = Math.min(10, healer.experience + 1);
+      healer.acted = true;
+    }
+
+    this.clearSelectionAndOverlays(false);
+    return true;
   }
 
   private handleMoveAttempt(pos: Axial): boolean {
