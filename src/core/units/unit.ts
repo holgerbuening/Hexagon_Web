@@ -1,5 +1,5 @@
 import { UnitType, UNIT_TYPES } from "./unitType";
-import type { PlayerId, Axial } from "../types";
+import type { PlayerId, Axial, SavedUnit } from "../types";
 
 export class Unit {
   readonly type: UnitType;
@@ -42,5 +42,38 @@ export class Unit {
   public resetForNewTurn(): void {
     this.remainingMovement = this.data.maxMovement;
     this.acted = false;
+  }
+  
+  public static serialize(unit: Unit): SavedUnit {
+    return {
+      type: unit.type,
+      q: unit.q,
+      r: unit.r,
+      owner: unit.owner,
+      hp: unit.hp,
+      maxHP: unit.maxHP,
+      offense: unit.offense,
+      defense: unit.defense,
+      attackRange: unit.attackRange,
+      experience: unit.experience,
+      remainingMovement: unit.remainingMovement,
+      acted: unit.acted,
+      selected: unit.selected,
+    };
+  }
+
+  public static fromSaved(data: SavedUnit): Unit {
+    const unit = new Unit(data.type, data.q, data.r, data.owner);
+    unit.hp = data.hp;
+    unit.maxHP = data.maxHP;
+    unit.offense = data.offense;
+    unit.defense = data.defense;
+    unit.attackRange = data.attackRange;
+    unit.experience = data.experience;
+    unit.remainingMovement = data.remainingMovement;
+    unit.acted = data.acted;
+    unit.selected = data.selected;
+    unit.pos = { q: data.q, r: data.r };
+    return unit;
   }
 }

@@ -1,4 +1,12 @@
-import { type Axial, type GameState, type HexTile, type PlayerId , type CombatPreview, type SelectHexResult} from "./types";
+import {
+  type Axial,
+  type GameState,
+  type HexTile,
+  type PlayerId,
+  type CombatPreview,
+  type SelectHexResult,
+  type SavedGameState,
+} from "./types";
 import  { Unit } from "./units/unit";
 import  { UnitType } from "./units/unitType";
 import { UNIT_TYPES } from "./units/unitType";
@@ -7,6 +15,7 @@ import { axialDistance } from "./hexMath";
 import { CombatSystem } from "./systems/combatSystem";
 import { MovementSystem } from "./systems/movementSystem";
 import { MapGenerator } from "./map/mapGenerator";
+import { deserializeState, serializeState } from "./stateSerializer";
 
 // Main game logic container (no rendering here)
 export class GameCore {
@@ -45,6 +54,17 @@ export class GameCore {
   // Expose immutable view (simple approach for now)
   public getState(): Readonly<GameState> {
     return this.state;
+  }
+
+  public serializeState(): SavedGameState {
+    return serializeState(this.state);
+  }
+
+  public loadState(saved: SavedGameState): void {
+    const { state, tileGrid } = deserializeState(saved);
+    this.state = state;
+    this.tileGrid = tileGrid;
+    this.pendingPurchase = null;
   }
 
   // Handle click selection

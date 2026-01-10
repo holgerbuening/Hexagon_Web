@@ -410,12 +410,61 @@ function openStartDialog(): void {
     onResume: () => {
       renderAll();
     },
+    onSave: () => {
+      saveGameToFile();
+    },
+    onLoad: () => {
+      loadGameFromFile();
+    },
     onStartNew: () => {
       game.startNewGame();
       renderAll();
     },
   });
 }
+
+function saveGameToFile(): void {
+  const saveData = game.serializeState();
+  const json = JSON.stringify(saveData, null, 2);
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `hexagon-save-${Date.now()}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function loadGameFromFile(): void {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "application/json";
+  input.addEventListener("change", () => {
+    const file = input.files?.[0];
+    if (!file) {
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        return;
+      }
+      try {
+        const parsed = JSON.parse(reader.result);
+        game.loadState(parsed);
+        renderAll();
+      } catch (error) {
+        console.error("Failed to load save game.", error);
+        window.alert("Save Game konnte nicht geladen werden.");
+      }
+    };
+    reader.readAsText(file);
+  });
+  input.click();
+}
+
 
 
 // Start loop

@@ -10,8 +10,6 @@ export const PLAYER_NAMES: Record<PlayerId, string> = {
   1: "Ursony"
 };
 
-
-
 export interface Axial {
   q: number;
   r: number;
@@ -32,6 +30,33 @@ export interface GameState {
   attackOverlay: Record<string, true>;
   tiles: HexTile[];
   units: Unit[];
+  playerBalances: number[];
+  mapWidth: number;
+  mapHeight: number;
+}
+
+export interface SavedUnit {
+  type: UnitType;
+  q: number;
+  r: number;
+  owner: PlayerId;
+  hp: number;
+  maxHP: number;
+  offense: number;
+  defense: number;
+  attackRange: number;
+  experience: number;
+  remainingMovement: number;
+  acted: boolean;
+  selected: boolean;
+}
+
+export interface SavedGameState {
+  version: 1;
+  turn: number;
+  currentPlayer: PlayerId;
+  tiles: HexTile[];
+  units: SavedUnit[];
   playerBalances: number[];
   mapWidth: number;
   mapHeight: number;
