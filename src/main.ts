@@ -244,9 +244,9 @@ window.addEventListener("resize", function () {
 
 window.addEventListener("keydown", function (ev) {
   // Existing: Space ends turn
-  if (ev.code === "Space") {
-    game.endTurn();
-    renderAll();
+  if (ev.code === "Space" || ev.code === " " || ev.code === "Escape" || ev.code === "KeyP") {
+    ev.preventDefault();
+    openStartDialog();
     return;
   }
 
@@ -407,7 +407,11 @@ function openStartDialog(): void {
   }
 
   showStartDialog(appRoot, {
-    onStart: () => {
+    onResume: () => {
+      renderAll();
+    },
+    onStartNew: () => {
+      game.startNewGame();
       renderAll();
     },
   });

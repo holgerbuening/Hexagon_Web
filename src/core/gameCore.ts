@@ -333,6 +333,22 @@ export class GameCore {
     this.state.attackOverlay = {};
   }
 
+  public startNewGame(): void {
+    
+    this.state.playerBalances = [50, 50];
+    this.state.turn = 1;
+    this.state.currentPlayer = 0;
+    this.pendingPurchase = null;
+    this.state.selectedHex = null;
+    this.state.selectedUnit = null;
+    this.state.reachableTiles = {};
+    this.state.attackOverlay = {};
+    this.state.units = [];
+    this.state.tiles = [];
+    this.createNewMap(this.state.mapWidth, this.state.mapHeight);
+    this.setStartUnits();
+  }
+
   public getBalance(player: number): number {
     return this.state.playerBalances[player] ?? 0;
   }

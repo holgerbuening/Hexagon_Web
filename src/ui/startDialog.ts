@@ -1,5 +1,6 @@
 type StartDialogOptions = {
-  onStart: () => void;
+  onStartNew: () => void;
+  onResume: () => void;
 };
 
 export function showStartDialog(appRoot: HTMLElement, options: StartDialogOptions): void {
@@ -14,17 +15,27 @@ export function showStartDialog(appRoot: HTMLElement, options: StartDialogOption
   title.className = "start-dialog-title";
   title.textContent = "Hexagon";
 
-  const button = document.createElement("button");
-  button.className = "start-dialog-button";
-  button.type = "button";
-  button.textContent = "Start New Game";
+  const resumeButton = document.createElement("button");
+  resumeButton.className = "start-dialog-button";
+  resumeButton.type = "button";
+  resumeButton.textContent = "Resume Game";
 
-  button.addEventListener("click", () => {
+  resumeButton.addEventListener("click", () => {
     overlay.remove();
-    options.onStart();
+    options.onResume();
   });
 
-  dialog.append(title, button);
+  const startButton = document.createElement("button");
+  startButton.className = "start-dialog-button";
+  startButton.type = "button";
+  startButton.textContent = "Start New Game";
+
+  startButton.addEventListener("click", () => {
+    overlay.remove();
+    options.onStartNew();
+  });
+
+  dialog.append(title, resumeButton, startButton);
   overlay.appendChild(dialog);
   appRoot.appendChild(overlay);
 }
