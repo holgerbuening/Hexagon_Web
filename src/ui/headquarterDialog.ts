@@ -1,4 +1,5 @@
 import type { Unit } from "../core/units/unit";
+import { UNIT_TYPES, UnitType } from "../core/units/unitType";
 
 type HeadquarterDialogHandlers = {
   onClose: () => void;
@@ -80,11 +81,38 @@ export function showHeadquarterDialog(
   leftH.textContent = "Available Units";
   leftCol.appendChild(leftH);
 
-  const placeholderList = document.createElement("div");
-  placeholderList.className = "hq-placeholder";
-  placeholderList.textContent =
-    "Kaufoptionen folgen im nächsten Schritt. (Hier kommt später die Liste + Preise rein.)";
-  leftCol.appendChild(placeholderList);
+  const unitList = document.createElement("ul");
+  unitList.className = "hq-unit-list";
+
+  const purchasableUnits: UnitType[] = [
+    UnitType.Infantry,
+    UnitType.MachnineGun,
+    UnitType.Medic,
+    UnitType.Engineer,
+    UnitType.Cavalry,
+    UnitType.Artillery,
+    UnitType.Tank
+  ];
+
+  purchasableUnits.forEach((unitType) => {
+    const data = UNIT_TYPES[unitType];
+    const item = document.createElement("li");
+    item.className = "hq-unit-item";
+
+    const name = document.createElement("span");
+    name.className = "hq-unit-name";
+    name.textContent = data.name;
+
+    const price = document.createElement("span");
+    price.className = "hq-unit-price";
+    price.textContent = `${data.price}`;
+
+    item.appendChild(name);
+    item.appendChild(price);
+    unitList.appendChild(item);
+  });
+
+  leftCol.appendChild(unitList);
 
   const rightCol = document.createElement("div");
   rightCol.className = "dialog-column";
