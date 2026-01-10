@@ -15,6 +15,8 @@ export class GameCore {
   private combatSystem: CombatSystem = new CombatSystem();
   private movementSystem: MovementSystem = new MovementSystem();
   private mapGenerator: MapGenerator = new MapGenerator();
+  private aiPlayer: PlayerId | null = null;
+  private aiDifficultyMultiplier: number = 1.0; // 1.0 = normal, >1.0 = harder AI
   
   constructor(width: number, height: number) {
     this.tileGrid = [];
@@ -76,8 +78,9 @@ export class GameCore {
   }
 
   public endTurn(): void {
-    this.state.turn += 1;
     this.resetUnitsOfPlayer(this.state.currentPlayer);
+    this.applyTurnIncome(this.state.currentPlayer);
+    this.state.turn += 1;
     this.togglePlayer();
     this.state.selectedHex = null;
     this.state.selectedUnit = null;
@@ -344,6 +347,34 @@ export class GameCore {
     return true;
   }
 
+  public configureAi(player: PlayerId | null, difficultyMultiplier = 1): void {
+    this.aiPlayer = player;
+    this.aiDifficultyMultiplier = Math.max(1, difficultyMultiplier);
+  }
+
+  private applyTurnIncome(player: PlayerId): void {
+    const multiplier = this.getIncomeMultiplier(player);
+    this.addBalance(player, 10 * multiplier);
+
+    for (const unit of this.state.units) {
+      if (unit.owner !== player) continue;
+      const tile = this.getTile({ q: unit.q, r: unit.r });
+      if (!tile) continue;
+
+      if (tile.field === FieldType.City) {
+        this.addBalance(player, 50 * multiplier);
+      } else if (tile.field === FieldType.Industry) {
+        this.addBalance(player, 40 * multiplier);
+      }
+    }
+  }
+
+  private getIncomeMultiplier(player: PlayerId): number {
+    if (this.aiPlayer === null) return 1;
+    if (this.aiPlayer !== player) return 1;
+    return this.aiDifficultyMultiplier;
+  }
+
   private setStartUnits(): void {
     // English comment: Reset units
     this.state.units = [];
@@ -481,7 +512,6 @@ export class GameCore {
     this.state.units.push(new Unit(UnitType.MachnineGun, p1.neighbors[2].q, p1.neighbors[2].r, 1));
     this.state.units.push(new Unit(UnitType.MilitaryBase, p1.base.q, p1.base.r, 1));
   }
-
 
 }
 
