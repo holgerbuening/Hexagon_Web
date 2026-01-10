@@ -4,6 +4,7 @@ import type { CombatPreview, SelectHexResult} from "./core/types";
 import { CanvasRenderer } from "./render/canvasRenderer";
 import { showCombatDialog } from "./ui/combatDialog";
 import { showHeadquarterDialog } from "./ui/headquarterDialog";
+import { showStartDialog } from "./ui/startDialog";
 import { PLAYER_NAMES } from "./core/types";
 
 const BASE_HEX_SIZE = 64;
@@ -21,6 +22,7 @@ const hudUnit = document.getElementById("hudUnit") as HTMLSpanElement;
 const hudZoom = document.getElementById("hudZoom") as HTMLSpanElement;
 const hudFlag = document.getElementById("hudFlag") as HTMLImageElement | null;
 const hudEndTurn = document.getElementById("hudEndTurn") as HTMLButtonElement | null;
+const hudSettings = document.getElementById("hudSettings") as HTMLImageElement | null;
 // App root for dialogs
 const appRoot = document.getElementById("app");
 
@@ -32,6 +34,15 @@ if (centerTile) {
   renderer.centerOnAxial(centerTile.q, centerTile.r);
 }
 renderAll();
+// Show start dialog
+openStartDialog();
+
+if (hudSettings) {
+  hudSettings.addEventListener("click", () => {
+    openStartDialog();
+  });
+}
+
 // End turn button
 if (hudEndTurn) {
   hudEndTurn.addEventListener("click", () => {
@@ -389,6 +400,19 @@ function headquarterDialog(result: SelectHexResult ): void {
     renderAll();
   }
 }
+
+function openStartDialog(): void {
+  if (!appRoot) {
+    return;
+  }
+
+  showStartDialog(appRoot, {
+    onStart: () => {
+      renderAll();
+    },
+  });
+}
+
 
 // Start loop
 requestAnimationFrame(animationLoop);

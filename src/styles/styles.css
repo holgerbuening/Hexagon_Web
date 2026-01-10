@@ -99,7 +99,8 @@ canvas:active {
 /* Flag at top */
 .hudFlagWrap {
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
+  align-items: flex-start;
 }
 
 .hudFlag {
@@ -107,6 +108,23 @@ canvas:active {
   height: auto;
   image-rendering: pixelated; /* looks good for pixel art */
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
+}
+
+.hudSettings {
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
+  transition: transform 0.1s ease, filter 0.15s ease;
+}
+
+.hudSettings:hover {
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.7));
+  transform: translateY(-1px);
+}
+
+.hudSettings:active {
+  transform: translateY(0);
 }
 
 /* Body text */
@@ -140,7 +158,8 @@ canvas:active {
 }
 
 .uiButton--ok {
-  background: #19b45a;
+  background: rgb(158, 175, 76);
+  border: 2px solid rgb(170, 176, 68);
   color: #fff;
 }
 
@@ -259,7 +278,7 @@ canvas:active {
 }
 
 .dialog-damage-value--green {
-  color: #55ff55;
+  color: rgb(92, 175, 76);
 }
 
 /* ===== Footer ===== */
@@ -272,9 +291,9 @@ canvas:active {
 
 /* ===== OK Button ===== */
 .dialog-button {
-  background: linear-gradient(#5fbf3a, #3e8e2f);
+  background: rgb(158, 175, 76);
   color: #ffffff;
-  border: none;
+  border: 2px solid rgb(170, 176, 68);
   padding: 10px 34px;
   font-size: 16px;
   font-weight: bold;
@@ -300,6 +319,75 @@ canvas:active {
   opacity: 0.8;
   box-shadow: none;
   transform: none;
+}
+
+/* ===== Start dialog ===== */
+.start-dialog-overlay {
+  background: rgba(0, 0, 0, 0.75);
+}
+
+.start-dialog {
+  width: 900px;
+  max-width: 94%;
+  min-height: 560px;
+  border-radius: 18px;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 0 50px rgba(0, 0, 0, 0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding: 48px 32px;
+  color: #ffffff;
+  text-align: center;
+}
+
+.start-dialog::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 0;
+}
+
+.start-dialog > * {
+  position: relative;
+  z-index: 1;
+}
+
+.start-dialog-title {
+  font-size: clamp(48px, 8vw, 96px);
+  margin: 0;
+  letter-spacing: 1px;
+  text-shadow: 0 6px 20px rgba(0, 0, 0, 0.8);
+}
+
+.start-dialog-button {
+  background: rgb(158, 175, 76);
+  color: #ffffff;
+  border: 2px solid rgb(170, 176, 68);
+  padding: 14px 44px;
+  font-size: 18px;
+  font-weight: 700;
+  border-radius: 24px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  min-width: 220px;
+}
+
+.start-dialog-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+}
+
+.start-dialog-button:active {
+  transform: translateY(0);
+  box-shadow: none;
 }
 
 /* Headquarter dialog specific */
