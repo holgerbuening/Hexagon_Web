@@ -422,6 +422,16 @@ canvas:active {
   box-shadow: none;
 }
 
+.start-dialog-button:disabled {
+  background: linear-gradient(#9da7b0, #6f7a84);
+  border-color: #88929b;
+  color: #e6e6e6;
+  cursor: not-allowed;
+  opacity: 0.8;
+  box-shadow: none;
+  transform: none;
+}
+
 /* Headquarter dialog specific */
 .hq-title {
   margin: 0 0 12px;
