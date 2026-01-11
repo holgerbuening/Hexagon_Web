@@ -421,6 +421,7 @@ export class GameCore {
     // English comment: After a successful move, clear overlays (same behavior as before)
     this.state.reachableTiles = {};
     this.state.attackOverlay = {};
+    this.state.selectedUnit = null;
     return true;
   }
 
@@ -515,6 +516,7 @@ export class GameCore {
     this.state.playerBalances[player] = this.getBalance(player) - cost;
     return true;
   }
+
   public beginPurchase(hqUnit: Unit, unitType: UnitType): void {
     this.pendingPurchase = { unitType, owner: hqUnit.owner };
     this.state.selectedUnit = null;
