@@ -65,6 +65,8 @@ export class AiSystem {
 
       if (unit.type === UnitType.Medic && this.tryHeal(state, unit)) continue;
 
+      if (unit.hp < 15 && this.tryRetreat(state, unit, getNeighbors)) continue;
+
       if (this.tryAttack(state, unit, getTile)) continue;
 
       this.tryMove(state, unit, getNeighbors);
@@ -197,6 +199,9 @@ export class AiSystem {
     getNeighbors: (q: number, r: number) => HexTile[]
   ): boolean {
     if (unit.acted || unit.remainingMovement <= 0) return false;
+    //keep the city and industry units in place
+    const currentTile = this.getTile(state, { q: unit.q, r: unit.r });
+    if (currentTile && this.isCityOrIndustry(currentTile)) return false;
 
     const target = this.findTarget(state, unit);
     if (!target) return false;
@@ -215,6 +220,48 @@ export class AiSystem {
       const q = Number(qStr);
       const r = Number(rStr);
       const dist = axialDistance({ q, r }, target);
+
+      if (dist < bestDistance) {
+        bestDistance = dist;
+        bestMove = { q, r };
+      }
+    }
+
+    if (!bestMove) return false;
+
+    const moved = this.movementSystem.tryMoveUsingReachable(state, unit, bestMove, reachableTiles);
+
+    if (moved) {
+      unit.acted = true;
+    }
+
+    return moved;
+  }
+
+  private tryRetreat(
+    state: GameState,
+    unit: Unit,
+    getNeighbors: (q: number, r: number) => HexTile[]
+  ): boolean {
+    if (unit.acted || unit.remainingMovement <= 0) return false;
+
+    const retreatTarget = this.findRetreatTarget(state, unit);
+    if (!retreatTarget) return false;
+
+    const reachableTiles = this.movementSystem.computeReachableTiles(
+      state,
+      unit,
+      (q, r) => getNeighbors(q, r)
+    );
+
+    let bestMove: Axial | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    for (const key of Object.keys(reachableTiles)) {
+      const [qStr, rStr] = key.split(",");
+      const q = Number(qStr);
+      const r = Number(rStr);
+      const dist = axialDistance({ q, r }, retreatTarget);
 
       if (dist < bestDistance) {
         bestDistance = dist;
@@ -338,6 +385,38 @@ export class AiSystem {
       if (distance < bestDistance) {
         bestDistance = distance;
         bestTarget = { q: enemy.q, r: enemy.r };
+      }
+    }
+
+    return bestTarget;
+  }
+
+  private findRetreatTarget(state: GameState, unit: Unit): Axial | null {
+    const medics = state.units.filter(
+      (ally) => ally.owner === unit.owner && ally.type === UnitType.Medic
+    );
+
+    let bestTarget: Axial | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    for (const medic of medics) {
+      const distance = axialDistance({ q: unit.q, r: unit.r }, { q: medic.q, r: medic.r });
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestTarget = { q: medic.q, r: medic.r };
+      }
+    }
+
+    if (bestTarget) return bestTarget;
+
+    for (const hq of state.units) {
+      if (hq.owner !== unit.owner) continue;
+      if (hq.type !== UnitType.MilitaryBase) continue;
+
+      const distance = axialDistance({ q: unit.q, r: unit.r }, { q: hq.q, r: hq.r });
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestTarget = { q: hq.q, r: hq.r };
       }
     }
 
