@@ -15,6 +15,7 @@ import { CombatSystem } from "./systems/combatSystem";
 import { MovementSystem } from "./systems/movementSystem";
 import { MapGenerator } from "./map/mapGenerator";
 import { deserializeState, serializeState } from "./stateSerializer";
+import { AiSystem } from "./systems/aiSystem";
 
 // Main game logic container (no rendering here)
 export class GameCore {
@@ -23,8 +24,7 @@ export class GameCore {
   private combatSystem: CombatSystem = new CombatSystem();
   private movementSystem: MovementSystem = new MovementSystem();
   private mapGenerator: MapGenerator = new MapGenerator();
-  private aiPlayer: PlayerId | null = null;
-  private aiDifficultyMultiplier: number = 1.0; // 1.0 = normal, >1.0 = harder AI
+  private aiSystem: AiSystem = new AiSystem(this.movementSystem, this.combatSystem);
   private pendingPurchase: { unitType: UnitType; owner: PlayerId } | null = null;
   
   constructor(width: number, height: number) {
@@ -48,6 +48,7 @@ export class GameCore {
     
     this.createNewMap(width, height);
     this.setStartUnits();
+    this.aiSystem.configure(1);
   }
 
   // Expose immutable view (simple approach for now)
@@ -111,6 +112,10 @@ export class GameCore {
   }
 
   public endTurn(): void {
+      this.endTurnInternal(true);
+  }
+
+  private endTurnInternal(allowAiTurn: boolean): void {
     this.resetUnitsOfPlayer(this.state.currentPlayer);
     this.applyTurnIncome(this.state.currentPlayer);
     this.state.turn += 1;
@@ -121,6 +126,17 @@ export class GameCore {
     this.state.attackOverlay = {};
     this.state.reachableTiles = {};
     
+    if (allowAiTurn && this.aiSystem.shouldRun(this.state)) {
+      this.aiSystem.runTurn(
+        this.state,
+        (pos) => this.getTile(pos),
+        (q, r) => this.getNeighbors(q, r),
+        (pos) => this.getUnitAt(pos),
+        (player, cost) => this.canAfford(player, cost),
+        (player, cost) => this.spend(player, cost)
+      );
+      this.endTurnInternal(false);
+    }
   }
 
   // --- helpers ---
@@ -493,8 +509,7 @@ export class GameCore {
   }
 
   public configureAi(player: PlayerId | null, difficultyMultiplier = 1): void {
-    this.aiPlayer = player;
-    this.aiDifficultyMultiplier = Math.max(1, difficultyMultiplier);
+    this.aiSystem.configure(player, difficultyMultiplier);
   }
 
   private applyTurnIncome(player: PlayerId): void {
@@ -515,9 +530,7 @@ export class GameCore {
   }
 
   private getIncomeMultiplier(player: PlayerId): number {
-    if (this.aiPlayer === null) return 1;
-    if (this.aiPlayer !== player) return 1;
-    return this.aiDifficultyMultiplier;
+    return this.aiSystem.getIncomeMultiplier(player);
   }
 
   private setStartUnits(): void {

@@ -136,6 +136,7 @@ export class MovementSystem {
     // Apply move
     unit.q = target.q;
     unit.r = target.r;
+    unit.pos = { q: target.q, r: target.r };
 
     // Reduce movement points
     unit.remainingMovement = unit.remainingMovement - cost;
