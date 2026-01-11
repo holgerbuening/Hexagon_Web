@@ -5,8 +5,10 @@ import { CanvasRenderer } from "./render/canvasRenderer";
 import { showCombatDialog } from "./ui/combatDialog";
 import { showHeadquarterDialog } from "./ui/headquarterDialog";
 import { showStartDialog } from "./ui/startDialog";
+import { showSettingsDialog } from "./ui/settingsDialog";
 import { showWinDialog } from "./ui/winDialog";
 import { PLAYER_NAMES } from "./core/types";
+import type { AiDifficulty, SettingsState } from "./ui/settingsDialog";
 
 const BASE_HEX_SIZE = 64;
 const canvas = document.getElementById("game") as HTMLCanvasElement;
@@ -31,6 +33,18 @@ const hudEndTurn = document.getElementById("hudEndTurn") as HTMLButtonElement | 
 const hudSettings = document.getElementById("hudSettings") as HTMLImageElement | null;
 // App root for dialogs
 const appRoot = document.getElementById("app");
+
+let settingsState: SettingsState = {
+  fullscreen: true,
+  aiDifficulty: "normal",
+};
+
+const aiDifficultyMultipliers: Record<AiDifficulty, number> = {
+  easy: 1.0,
+  normal: 2.0,
+  hard: 3.0,
+};
+
 
 // Render once initially
 resizeCanvasToDisplaySize(canvas);
@@ -424,10 +438,12 @@ function openStartDialog(): void {
   if (!appRoot) {
     return;
   }
+  exitFullscreen();
 
   showStartDialog(appRoot, {
     resumeEnabled: !game.getState().gameOver,
     onResume: () => {
+      applyFullscreenPreference();
       renderAll();
     },
     onSave: () => {
@@ -437,8 +453,31 @@ function openStartDialog(): void {
       loadGameFromFile();
     },
     onStartNew: () => {
+      game.configureAi(1, aiDifficultyMultipliers[settingsState.aiDifficulty]);
       game.startNewGame();
+      applyFullscreenPreference();
       renderAll();
+    },
+    onOpenSettings: () => {
+      openSettingsDialog();
+    },
+  });
+}
+
+function openSettingsDialog(): void {
+  if (!appRoot) {
+    return;
+  }
+
+  showSettingsDialog(appRoot, {
+    initialState: settingsState,
+    onApply: (nextState) => {
+      settingsState = nextState;
+      game.configureAi(1, aiDifficultyMultipliers[settingsState.aiDifficulty]);
+      openStartDialog();
+    },
+    onCancel: () => {
+      openStartDialog();
     },
   });
 }
@@ -486,6 +525,7 @@ function loadGameFromFile(): void {
       try {
         const parsed = JSON.parse(reader.result);
         game.loadState(parsed);
+        game.configureAi(1, aiDifficultyMultipliers[settingsState.aiDifficulty]);
         renderAll();
       } catch (error) {
         console.error("Failed to load save game.", error);
@@ -495,6 +535,33 @@ function loadGameFromFile(): void {
     reader.readAsText(file);
   });
   input.click();
+}
+
+function requestFullscreen(): void {
+  const root = document.documentElement;
+  if (!root.requestFullscreen) {
+    return;
+  }
+  void root.requestFullscreen().catch((error) => {
+    console.warn("Failed to enter fullscreen mode.", error);
+  });
+}
+
+function exitFullscreen(): void {
+  if (!document.fullscreenElement || !document.exitFullscreen) {
+    return;
+  }
+  void document.exitFullscreen().catch((error) => {
+    console.warn("Failed to exit fullscreen mode.", error);
+  });
+}
+
+function applyFullscreenPreference(): void {
+  if (settingsState.fullscreen) {
+    requestFullscreen();
+    return;
+  }
+  exitFullscreen();
 }
 
 

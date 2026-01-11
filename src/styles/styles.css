@@ -353,6 +353,17 @@ canvas:active {
   transform: none;
 }
 
+.dialog-button--secondary {
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  color: #ffffff;
+}
+
+.dialog-button--secondary:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+
 /* ===== Start dialog ===== */
 .start-dialog-overlay {
   background: rgba(0, 0, 0, 0.75);
@@ -430,6 +441,67 @@ canvas:active {
   opacity: 0.8;
   box-shadow: none;
   transform: none;
+}
+
+/* ===== Settings dialog ===== */
+.settings-dialog {
+  width: 720px;
+  max-width: 92%;
+}
+
+.settings-dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 360px;
+}
+
+.settings-dialog-title {
+  margin: 0;
+  text-align: center;
+  font-size: 28px;
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.settings-label {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.settings-checkbox {
+  width: 20px;
+  height: 20px;
+  accent-color: rgb(170, 176, 68);
+}
+
+.settings-select {
+  min-width: 180px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(0, 0, 0, 0.6);
+  color: #ffffff;
+  font-size: 15px;
+}
+
+.settings-dialog-footer {
+  margin-top: 8px;
 }
 
 /* Headquarter dialog specific */

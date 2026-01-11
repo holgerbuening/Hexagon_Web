@@ -3,31 +3,11 @@ type StartDialogOptions = {
   onResume: () => void;
   onSave: () => void;
   onLoad: () => void;
+  onOpenSettings: () => void;
   resumeEnabled?: boolean;
 };
 
-  function requestFullscreen(): void {
-    const root = document.documentElement;
-    if (!root.requestFullscreen) {
-      return;
-    }
-    void root.requestFullscreen().catch((error) => {
-      console.warn("Failed to enter fullscreen mode.", error);
-    });
-  }
-
-  function exitFullscreen(): void {
-    if (!document.fullscreenElement || !document.exitFullscreen) {
-      return;
-    }
-    void document.exitFullscreen().catch((error) => {
-      console.warn("Failed to exit fullscreen mode.", error);
-    });
-  }
-
 export function showStartDialog(appRoot: HTMLElement, options: StartDialogOptions): void {
-  exitFullscreen();
-
   const overlay = document.createElement("div");
   overlay.className = "dialog-overlay start-dialog-overlay";
 
@@ -51,7 +31,6 @@ export function showStartDialog(appRoot: HTMLElement, options: StartDialogOption
       return;
     }
     overlay.remove();
-    requestFullscreen();
     options.onResume();
   });
 
@@ -62,9 +41,19 @@ export function showStartDialog(appRoot: HTMLElement, options: StartDialogOption
 
   startButton.addEventListener("click", () => {
     overlay.remove();
-    requestFullscreen();
     options.onStartNew();
   });
+
+  const settingsButton = document.createElement("button");
+  settingsButton.className = "start-dialog-button";
+  settingsButton.type = "button";
+  settingsButton.textContent = "Settings";
+
+  settingsButton.addEventListener("click", () => {
+    overlay.remove();
+    options.onOpenSettings();
+  });
+
 
   const saveButton = document.createElement("button");
   saveButton.className = "start-dialog-button";
@@ -85,7 +74,7 @@ export function showStartDialog(appRoot: HTMLElement, options: StartDialogOption
     options.onLoad();
   });
 
-  dialog.append(title, resumeButton, startButton, saveButton, loadButton);
+  dialog.append(title, resumeButton, startButton, settingsButton, saveButton, loadButton);
   overlay.appendChild(dialog);
   appRoot.appendChild(overlay);
 }
