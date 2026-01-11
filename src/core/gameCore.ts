@@ -81,6 +81,14 @@ export class GameCore {
     // English comment: Always store last clicked hex
     this.state.selectedHex = { q: tile.q, r: tile.r };
 
+    // deselect if clicking the same tile
+    const selectedUnit = this.state.selectedUnit;
+    if (selectedUnit && selectedUnit.q === tile.q && selectedUnit.r === tile.r) {
+      this.clearSelectionAndOverlays(true);
+      return { kind: "none" };
+    }
+
+
     // 1) Medic heal attempt -> heal friendly if in range
     if (this.handleHealAttempt(pos)) {
       return { kind: "none" };
