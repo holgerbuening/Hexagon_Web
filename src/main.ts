@@ -448,9 +448,11 @@ function openStartDialog(): void {
     },
     onSave: () => {
       saveGameToFile();
+      applyFullscreenPreference();      
     },
     onLoad: () => {
-      loadGameFromFile();
+      loadGameFromFile();   
+      applyFullscreenPreference();
     },
     onStartNew: () => {
       game.configureAi(1, aiDifficultyMultipliers[settingsState.aiDifficulty]);
