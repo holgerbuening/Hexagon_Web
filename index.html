@@ -19,8 +19,18 @@
         <div class="hudBody">
           <div><strong>Turn:</strong> <span id="hudTurn">-</span></div>
           <div><strong>Player:</strong> <span id="hudPlayer">-</span></div>
+          <div><strong>Balance:</strong> <span id="hudBalance">-</span></div>
           <div><strong>Selected:</strong> <span id="hudSelected">-</span></div>
-          <div><strong>Selected Unit:</strong> <span id="hudUnit">-</span></div>
+          <div class="hudSelectedUnit">
+            <strong>Selected Unit:</strong>
+            <img id="hudUnitImage" class="hudUnitImage is-hidden" src="" alt="Selected unit" />
+            <div class="hudUnitStats">
+              <div><strong>HP:</strong> <span id="hudUnitHp">-</span></div>
+              <div><strong>Offense:</strong> <span id="hudUnitOffense">-</span></div>
+              <div><strong>Defense:</strong> <span id="hudUnitDefense">-</span></div>
+              <div><strong>Experience:</strong> <span id="hudUnitExperience">-</span></div>
+            </div>
+          </div>
           <div><strong>Zoom:</strong> <span id="hudZoom">-</span></div>
         </div>
 

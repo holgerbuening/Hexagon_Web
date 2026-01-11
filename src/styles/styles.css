@@ -139,6 +139,38 @@ canvas:active {
   font-weight: 700;
 }
 
+.hudSelectedUnit {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 6px;
+}
+
+.hudUnitImage {
+  width: 120px;
+  height: auto;
+  align-self: center;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
+}
+
+.hudUnitImage.is-hidden {
+  display: none;
+}
+
+.hudUnitStats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hudUnitStats > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 /* Reusable button */
 .uiButton {
   border: 0;

@@ -41,6 +41,8 @@ export class Unit {
 
   public resetForNewTurn(): void {
     this.remainingMovement = this.data.maxMovement;
+    this.hp +=10;
+    if (this.hp > this.maxHP) this.hp = this.maxHP;
     this.acted = false;
   }
   

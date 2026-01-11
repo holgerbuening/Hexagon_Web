@@ -17,8 +17,13 @@ renderer.setInvalidateHandler(renderAll);
 // HUD elements
 const hudTurn = document.getElementById("hudTurn") as HTMLSpanElement;
 const hudPlayer = document.getElementById("hudPlayer") as HTMLSpanElement;
+const hudBalance = document.getElementById("hudBalance") as HTMLSpanElement;
 const hudSelected = document.getElementById("hudSelected") as HTMLSpanElement;
-const hudUnit = document.getElementById("hudUnit") as HTMLSpanElement;
+const hudUnitImage = document.getElementById("hudUnitImage") as HTMLImageElement;
+const hudUnitHp = document.getElementById("hudUnitHp") as HTMLSpanElement;
+const hudUnitOffense = document.getElementById("hudUnitOffense") as HTMLSpanElement;
+const hudUnitDefense = document.getElementById("hudUnitDefense") as HTMLSpanElement;
+const hudUnitExperience = document.getElementById("hudUnitExperience") as HTMLSpanElement;
 const hudZoom = document.getElementById("hudZoom") as HTMLSpanElement;
 const hudFlag = document.getElementById("hudFlag") as HTMLImageElement | null;
 const hudEndTurn = document.getElementById("hudEndTurn") as HTMLButtonElement | null;
@@ -186,7 +191,8 @@ function updateHud(): void {
 
   hudTurn.textContent = String(state.turn);
   hudPlayer.textContent = PLAYER_NAMES[state.currentPlayer];
-  
+  hudBalance.textContent = String(state.playerBalances[state.currentPlayer] ?? 0);
+
   if (hudFlag) {
     // English comment: Update flag image based on current player id
     hudFlag.src = `flags/player${state.currentPlayer}.png`;
@@ -201,16 +207,24 @@ function updateHud(): void {
   }
 
   if (state.selectedUnit !== null) {
-      const unit = state.units.find(u => u === state.selectedUnit);
-      if (unit) {
-        // Show basic unit info (extend later with unit type/stats)
-        hudUnit.textContent = ` owner=${unit.owner}, hp=${unit.hp}, mv=${unit.remainingMovement}`;
-      } else {
-        hudUnit.textContent = "-";
-      }
-    } else {
-      hudUnit.textContent = "-";
-    }
+    const unit = state.selectedUnit;
+    hudUnitImage.src = `/units/${unit.data.spriteKey}.png`;
+    hudUnitImage.alt = unit.data.name;
+    hudUnitImage.classList.remove("is-hidden");
+    hudUnitHp.textContent = `${unit.hp}/${unit.maxHP}`;
+    hudUnitOffense.textContent = String(unit.offense);
+    hudUnitDefense.textContent = String(unit.defense);
+    hudUnitExperience.textContent = String(unit.experience);
+  } else {
+    hudUnitImage.src = "";
+    hudUnitImage.alt = "Selected unit";
+    hudUnitImage.classList.add("is-hidden");
+    hudUnitHp.textContent = "-";
+    hudUnitOffense.textContent = "-";
+    hudUnitDefense.textContent = "-";
+    hudUnitExperience.textContent = "-";
+  }
+    
 
   hudZoom.textContent = renderer.getZoom().toFixed(2);
 }
