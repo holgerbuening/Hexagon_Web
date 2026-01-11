@@ -233,30 +233,111 @@ export class AiSystem {
     return moved;
   }
 
+  private getTile(state: GameState, pos: Axial): HexTile | undefined {
+    return state.tiles.find((tile) => tile.q === pos.q && tile.r === pos.r);
+  }
+
+  private getUnitAt(state: GameState, pos: Axial): Unit | undefined {
+    return state.units.find((occupant) => occupant.q === pos.q && occupant.r === pos.r);
+  }
+
+  private isCityOrIndustry(tile: HexTile): boolean {
+    return tile.field === FieldType.City || tile.field === FieldType.Industry;
+  }
+
+  private countHoldings(state: GameState, owner: PlayerId): number {
+    return state.units.reduce((count, occupant) => {
+      if (occupant.owner !== owner) return count;
+      const tile = this.getTile(state, { q: occupant.q, r: occupant.r });
+      if (!tile || !this.isCityOrIndustry(tile)) return count;
+      return count + 1;
+    }, 0);
+  }
+
+  private findClosestFreeTileInRange(state: GameState, unit: Unit, center: Axial): Axial | null {
+    let bestTile: Axial | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    let bestCenterDistance = Number.POSITIVE_INFINITY;
+
+    for (const tile of state.tiles) {
+      if (tile.field === FieldType.Ocean) continue;
+      if (this.getUnitAt(state, { q: tile.q, r: tile.r })) continue;
+
+      const centerDistance = axialDistance({ q: tile.q, r: tile.r }, center);
+      if (centerDistance > unit.attackRange) continue;
+
+      const unitDistance = axialDistance({ q: unit.q, r: unit.r }, { q: tile.q, r: tile.r });
+
+      if (
+        unitDistance < bestDistance ||
+        (unitDistance === bestDistance && centerDistance < bestCenterDistance)
+      ) {
+        bestDistance = unitDistance;
+        bestCenterDistance = centerDistance;
+        bestTile = { q: tile.q, r: tile.r };
+      }
+    }
+
+    return bestTile;
+  }
+
+
   private findTarget(state: GameState, unit: Unit): Axial | null {
+    const aiHoldings = this.countHoldings(state, unit.owner);
+    const opponentHoldings = state.units.reduce((max, occupant) => {
+      if (occupant.owner === unit.owner) return max;
+      return Math.max(max, this.countHoldings(state, occupant.owner));
+    }, 0);
+
+    // Prioritize attacking enemy military bases if we have more holdings
+    if (aiHoldings > opponentHoldings) {
+      for (const enemy of state.units) {
+        if (enemy.owner === unit.owner) continue;
+        if (enemy.type !== UnitType.MilitaryBase) continue;
+
+        const target = this.findClosestFreeTileInRange(state, unit, { q: enemy.q, r: enemy.r });
+        if (target) return target;
+      }
+    }
+
     let bestTarget: Axial | null = null;
     let bestDistance = Number.POSITIVE_INFINITY;
+    // Next, try to capture unoccupied cities or industries
+    for (const tile of state.tiles) {
+      if (!this.isCityOrIndustry(tile)) continue;
+      if (this.getUnitAt(state, { q: tile.q, r: tile.r })) continue;
+      const distance = axialDistance({ q: unit.q, r: unit.r }, { q: tile.q, r: tile.r });
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestTarget = { q: tile.q, r: tile.r };
+      }
+    }
+    
+    if (bestTarget) return bestTarget;
+    // Next, try to attack enemy-occupied cities or industries
+    for (const tile of state.tiles) {
+      if (!this.isCityOrIndustry(tile)) continue;
+      const occupant = this.getUnitAt(state, { q: tile.q, r: tile.r });
+      if (!occupant || occupant.owner === unit.owner) continue;
 
+      const target = this.findClosestFreeTileInRange(state, unit, { q: tile.q, r: tile.r });
+      if (!target) continue;
+
+      const distance = axialDistance({ q: unit.q, r: unit.r }, target);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestTarget = target;
+      }
+    }
+    
+    if (bestTarget) return bestTarget;
+    // Finally, move towards the closest enemy unit
     for (const enemy of state.units) {
       if (enemy.owner === unit.owner) continue;
       const distance = axialDistance({ q: unit.q, r: unit.r }, { q: enemy.q, r: enemy.r });
       if (distance < bestDistance) {
         bestDistance = distance;
         bestTarget = { q: enemy.q, r: enemy.r };
-      }
-    }
-
-    if (bestTarget) return bestTarget;
-
-    for (const tile of state.tiles) {
-      if (tile.field !== FieldType.City && tile.field !== FieldType.Industry) continue;
-      if (state.units.some((u) => u.q === tile.q && u.r === tile.r && u.owner === unit.owner)) {
-        continue;
-      }
-      const distance = axialDistance({ q: unit.q, r: unit.r }, { q: tile.q, r: tile.r });
-      if (distance < bestDistance) {
-        bestDistance = distance;
-        bestTarget = { q: tile.q, r: tile.r };
       }
     }
 
