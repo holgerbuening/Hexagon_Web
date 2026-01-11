@@ -451,8 +451,9 @@ function openStartDialog(): void {
       applyFullscreenPreference();      
     },
     onLoad: () => {
-      loadGameFromFile();   
-      applyFullscreenPreference();
+      loadGameFromFile(() => {
+        applyFullscreenPreference();
+      });
     },
     onStartNew: () => {
       game.configureAi(1, aiDifficultyMultipliers[settingsState.aiDifficulty]);
@@ -510,7 +511,7 @@ function saveGameToFile(): void {
   URL.revokeObjectURL(url);
 }
 
-function loadGameFromFile(): void {
+function loadGameFromFile(onSelected?: () => void): void {
   const input = document.createElement("input");
   input.type = "file";
   input.accept = "application/json";
@@ -519,6 +520,7 @@ function loadGameFromFile(): void {
     if (!file) {
       return;
     }
+    onSelected?.();
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result !== "string") {
