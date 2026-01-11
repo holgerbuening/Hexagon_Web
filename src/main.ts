@@ -8,7 +8,8 @@ import { showStartDialog } from "./ui/startDialog";
 import { showSettingsDialog } from "./ui/settingsDialog";
 import { showWinDialog } from "./ui/winDialog";
 import { PLAYER_NAMES } from "./core/types";
-import type { AiDifficulty, SettingsState } from "./ui/settingsDialog";
+import type { SettingsState } from "./ui/settingsDialog";
+import { aiDifficultyMultipliers } from "./core/systems/aiSystem";
 
 const BASE_HEX_SIZE = 64;
 const canvas = document.getElementById("game") as HTMLCanvasElement;
@@ -39,11 +40,7 @@ let settingsState: SettingsState = {
   aiDifficulty: "normal",
 };
 
-const aiDifficultyMultipliers: Record<AiDifficulty, number> = {
-  easy: 1.0,
-  normal: 2.0,
-  hard: 3.0,
-};
+
 
 
 // Render once initially

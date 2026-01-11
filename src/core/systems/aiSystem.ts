@@ -6,6 +6,14 @@ import { CombatSystem } from "./combatSystem";
 import { Unit } from "../units/unit";
 import { UnitType, UNIT_TYPES } from "../units/unitType";
 
+export type AiDifficulty = "easy" | "normal" | "hard";
+
+export const aiDifficultyMultipliers: Record<AiDifficulty, number> = {
+  easy: 1.0,
+  normal: 2.0,
+  hard: 3.0,
+};
+
 export class AiSystem {
   private movementSystem: MovementSystem;
   private combatSystem: CombatSystem;
@@ -17,7 +25,7 @@ export class AiSystem {
     this.combatSystem = combatSystem;
   }
 
-  public configure(player: PlayerId | null, difficultyMultiplier = 1): void {
+  public configure(player: PlayerId | null, difficultyMultiplier = aiDifficultyMultipliers.normal): void {
     this.aiPlayer = player;
     this.aiDifficultyMultiplier = Math.max(1, difficultyMultiplier);
   }
@@ -30,6 +38,10 @@ export class AiSystem {
     if (this.aiPlayer === null) return 1;
     if (this.aiPlayer !== player) return 1;
     return this.aiDifficultyMultiplier;
+  }
+
+  public setDifficultyMultiplier(multiplier: number): void {
+    this.aiDifficultyMultiplier = Math.max(1, multiplier);
   }
 
   public runTurn(

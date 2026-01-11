@@ -1,4 +1,4 @@
-export type AiDifficulty = "easy" | "normal" | "hard";
+import type { AiDifficulty } from "../core/systems/aiSystem";
 
 export type SettingsState = {
   fullscreen: boolean;
