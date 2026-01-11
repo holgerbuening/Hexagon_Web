@@ -33,6 +33,8 @@ export class GameCore {
     this.state = {
       turn: 1,
       currentPlayer: 0,
+      gameOver: false,
+      winner: null,
       selectedHex: null,
       selectedUnit: null,
       mapWidth: width,
@@ -69,6 +71,9 @@ export class GameCore {
 
   // Handle click selection
   public selectHex(pos: Axial): SelectHexResult  {
+    if (this.state.gameOver) {
+      return { kind: "none" };
+    }
     if (this.handlePurchasePlacement(pos)) {
       return { kind: "none" };
     }
@@ -120,6 +125,9 @@ export class GameCore {
   }
 
   public endTurn(): void {
+      if (this.state.gameOver) {
+        return;
+      }
       this.endTurnInternal(true);
   }
 
@@ -263,7 +271,10 @@ export class GameCore {
   }
  
   public applyCombat(preview: CombatPreview): void {
+    const attacker = this.getUnitAt(preview.attackerPos);
+    const attackerOwner = attacker?.owner ?? this.state.currentPlayer;
     this.combatSystem.apply(this.state, preview);
+    this.evaluateGameOver(attackerOwner);
 
     // Clear selection/overlays after combat (UI/interaction belongs in GameCore)
     this.state.selectedUnit = null;
@@ -280,6 +291,29 @@ export class GameCore {
     this.state.selectedUnit = null;
     this.state.reachableTiles = {};
     this.state.attackOverlay = {};
+  }
+
+  private evaluateGameOver(attackerOwner: PlayerId): void {
+    const hq0Alive = this.state.units.some(
+      (unit) => unit.owner === 0 && unit.type === UnitType.MilitaryBase
+    );
+    const hq1Alive = this.state.units.some(
+      (unit) => unit.owner === 1 && unit.type === UnitType.MilitaryBase
+    );
+
+    if (hq0Alive && hq1Alive) {
+      return;
+    }
+
+    this.state.gameOver = true;
+
+    if (hq0Alive && !hq1Alive) {
+      this.state.winner = 0;
+    } else if (!hq0Alive && hq1Alive) {
+      this.state.winner = 1;
+    } else {
+      this.state.winner = attackerOwner;
+    }
   }
 
   private handleFriendlyUnitClick(pos: Axial): SelectHexResult | null{
@@ -450,6 +484,8 @@ export class GameCore {
     this.state.playerBalances = [50, 50];
     this.state.turn = 1;
     this.state.currentPlayer = 0;
+    this.state.gameOver = false;
+    this.state.winner = null;
     this.pendingPurchase = null;
     this.state.selectedHex = null;
     this.state.selectedUnit = null;

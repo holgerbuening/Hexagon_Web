@@ -3,6 +3,7 @@ type StartDialogOptions = {
   onResume: () => void;
   onSave: () => void;
   onLoad: () => void;
+  resumeEnabled?: boolean;
 };
 
   function requestFullscreen(): void {
@@ -42,8 +43,13 @@ export function showStartDialog(appRoot: HTMLElement, options: StartDialogOption
   resumeButton.className = "start-dialog-button";
   resumeButton.type = "button";
   resumeButton.textContent = "Resume Game";
+  const resumeEnabled = options.resumeEnabled ?? true;
+  resumeButton.disabled = !resumeEnabled;
 
   resumeButton.addEventListener("click", () => {
+    if (!resumeEnabled) {
+      return;
+    }
     overlay.remove();
     requestFullscreen();
     options.onResume();

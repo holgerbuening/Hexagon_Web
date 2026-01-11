@@ -25,6 +25,8 @@ export interface HexTile extends Axial {
 export interface GameState {
   turn: number;
   currentPlayer: PlayerId;
+  gameOver: boolean;
+  winner: PlayerId | null;
   selectedHex: Axial | null;
   selectedUnit: Unit | null;
   reachableTiles: Record<string, number>;
@@ -56,6 +58,8 @@ export interface SavedGameState {
   version: 1;
   turn: number;
   currentPlayer: PlayerId;
+  gameOver?: boolean;
+  winner?: PlayerId | null;
   tiles: HexTile[];
   units: SavedUnit[];
   playerBalances: number[];

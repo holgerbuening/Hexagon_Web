@@ -1,10 +1,11 @@
 import { GameCore } from "./core/gameCore";
 import { pixelToAxial } from "./core/hexMath";
-import type { CombatPreview, SelectHexResult} from "./core/types";
+import type { CombatPreview, PlayerId, SelectHexResult} from "./core/types";
 import { CanvasRenderer } from "./render/canvasRenderer";
 import { showCombatDialog } from "./ui/combatDialog";
 import { showHeadquarterDialog } from "./ui/headquarterDialog";
 import { showStartDialog } from "./ui/startDialog";
+import { showWinDialog } from "./ui/winDialog";
 import { PLAYER_NAMES } from "./core/types";
 
 const BASE_HEX_SIZE = 64;
@@ -392,6 +393,10 @@ function combatDialog(preview: CombatPreview): void {
           onOk: () => {
             game.applyCombat(preview);
             renderAll();
+            const state = game.getState();
+            if (state.gameOver && state.winner !== null) {
+              openWinDialog(state.winner);
+            }
           },
           
         });
@@ -421,6 +426,7 @@ function openStartDialog(): void {
   }
 
   showStartDialog(appRoot, {
+    resumeEnabled: !game.getState().gameOver,
     onResume: () => {
       renderAll();
     },
@@ -433,6 +439,18 @@ function openStartDialog(): void {
     onStartNew: () => {
       game.startNewGame();
       renderAll();
+    },
+  });
+}
+
+function openWinDialog(winner: PlayerId): void {
+  if (!appRoot) {
+    return;
+  }
+
+  showWinDialog(appRoot, winner, {
+    onOk: () => {
+      openStartDialog();
     },
   });
 }
@@ -483,5 +501,3 @@ function loadGameFromFile(): void {
 
 // Start loop
 requestAnimationFrame(animationLoop);
-
-

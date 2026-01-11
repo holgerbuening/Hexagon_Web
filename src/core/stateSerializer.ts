@@ -11,6 +11,8 @@ export function serializeState(state: GameState): SavedGameState {
     version: 1,
     turn: state.turn,
     currentPlayer: state.currentPlayer,
+    gameOver: state.gameOver,
+    winner: state.winner,
     tiles: state.tiles.map((tile) => ({ ...tile })),
     units: state.units.map((unit) => Unit.serialize(unit)),
     playerBalances: [...state.playerBalances],
@@ -33,6 +35,8 @@ export function deserializeState(saved: SavedGameState): DeserializedState {
   const state: GameState = {
     turn: saved.turn,
     currentPlayer: saved.currentPlayer,
+    gameOver: saved.gameOver ?? false,
+    winner: saved.winner ?? null,
     selectedHex: null,
     selectedUnit: null,
     reachableTiles: {},
