@@ -26,12 +26,12 @@ function createStatLine(label: string, value: string): HTMLDivElement {
 
 function getFlagUrl(unit: Unit): string {
   // English comment: owner is expected to be 0 or 1
-  return `/flags/player${unit.owner}.png`;
+  return `/images/flags/player${unit.owner}.png`;
 }
 
 function getUnitImageUrl(unit: Unit): string {
   // English comment: unit.type maps directly to sprite filename
-  return `/units/${String(unit.type).toLowerCase()}.png`;
+  return `/images/units/${String(unit.type).toLowerCase()}.png`;
 }
 
 export function showCombatDialog(
@@ -49,7 +49,7 @@ export function showCombatDialog(
   const dialog = document.createElement("div");
   dialog.className = "dialog";
   dialog.style.backgroundImage =
-    'url("/background/combatbackground.png")';
+    'url("/images/background/combatbackground.png")';
 
   const content = document.createElement("div");
   content.className = "dialog-content";

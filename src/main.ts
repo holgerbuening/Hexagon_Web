@@ -207,7 +207,7 @@ function updateHud(): void {
 
   if (hudFlag) {
     // English comment: Update flag image based on current player id
-    hudFlag.src = `flags/player${state.currentPlayer}.png`;
+    hudFlag.src = `/images/flags/player${state.currentPlayer}.png`;
   }
 
 
@@ -220,7 +220,7 @@ function updateHud(): void {
 
   if (state.selectedUnit !== null) {
     const unit = state.selectedUnit;
-    hudUnitImage.src = `/units/${unit.data.spriteKey}.png`;
+    hudUnitImage.src = `/images/units/${unit.data.spriteKey}.png`;
     hudUnitImage.alt = unit.data.name;
     hudUnitImage.classList.remove("is-hidden");
     hudUnitHp.textContent = `${unit.hp}/${unit.maxHP}`;

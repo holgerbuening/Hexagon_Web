@@ -14,7 +14,7 @@ export function showWinDialog(
 
   const dialog = document.createElement("div");
   dialog.className = "dialog";
-  dialog.style.backgroundImage = 'url("/background/combatdialogbackground.png")';
+  dialog.style.backgroundImage = 'url("/images/background/combatdialogbackground.png")';
 
   const content = document.createElement("div");
   content.className = "dialog-content";
@@ -31,7 +31,7 @@ export function showWinDialog(
   const flagImg = document.createElement("img");
   flagImg.className = "dialog-flag";
   flagImg.alt = `${PLAYER_NAMES[winner]} flag`;
-  flagImg.src = `flags/player${winner}.png`;
+  flagImg.src = `/images/flags/player${winner}.png`;
 
   flagCol.appendChild(flagImg);
   columns.appendChild(flagCol);

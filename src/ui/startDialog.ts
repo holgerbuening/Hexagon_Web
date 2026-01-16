@@ -13,7 +13,7 @@ export function showStartDialog(appRoot: HTMLElement, options: StartDialogOption
 
   const dialog = document.createElement("div");
   dialog.className = "start-dialog";
-  dialog.style.backgroundImage = 'url("/background/startbackground.png")';
+  dialog.style.backgroundImage = 'url("/images/background/startbackground.png")';
 
   const title = document.createElement("h1");
   title.className = "start-dialog-title";

@@ -40,7 +40,7 @@ export function showHeadquarterDialog(
 
   const dialog = document.createElement("div");
   dialog.className = "dialog";
-  dialog.style.backgroundImage = 'url("/background/headquarterdialogbackground.png")';
+  dialog.style.backgroundImage = 'url("/images/background/headquarterdialogbackground.png")';
 
   const content = document.createElement("div");
   content.className = "dialog-content";
@@ -58,7 +58,7 @@ export function showHeadquarterDialog(
   const flag = document.createElement("img");
   flag.className = "hq-flag";
   flag.alt = "current player flag";
-  flag.src = `/flags/player${hqUnit.owner}.png`;
+  flag.src = `/images/flags/player${hqUnit.owner}.png`;
   top.appendChild(flag);
 
   const infoBox = document.createElement("div");
@@ -126,7 +126,7 @@ export function showHeadquarterDialog(
   function setPreview(unitType: UnitType): void {
     selectedUnitType = unitType;
     const data = UNIT_TYPES[unitType];
-    previewImage.src = `/units/${data.spriteKey}.png`;
+    previewImage.src = `/images/units/${data.spriteKey}.png`;
     previewImage.alt = `${data.name} preview`;
 
     previewStats.innerHTML = "";

@@ -17,7 +17,7 @@ export function showSettingsDialog(appRoot: HTMLElement, options: SettingsDialog
 
   const dialog = document.createElement("div");
   dialog.className = "dialog settings-dialog";
-  dialog.style.backgroundImage = 'url("/background/settingsbackground.png")';
+  dialog.style.backgroundImage = 'url("/images/background/settingsbackground.png")';
 
   const content = document.createElement("div");
   content.className = "dialog-content settings-dialog-content";

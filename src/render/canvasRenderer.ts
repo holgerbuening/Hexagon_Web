@@ -399,19 +399,19 @@ export class CanvasRenderer {
 
   // Load tile images from /public
   private loadTileImages(): void {
-    this.addTileImage(FieldType.Farmland, "/tiles/farmland.png");
-    this.addTileImage(FieldType.Woods, "/tiles/woods.png");
-    this.addTileImage(FieldType.Ocean, "/tiles/ocean.png");
-    this.addTileImage(FieldType.Mountain, "/tiles/mountain.png");
-    this.addTileImage(FieldType.Hills, "/tiles/hills.png");
-    this.addTileImage(FieldType.City, "/tiles/city.png");
-    this.addTileImage(FieldType.Industry, "/tiles/industry.png");
+    this.addTileImage(FieldType.Farmland, "/images/tiles/farmland.png");
+    this.addTileImage(FieldType.Woods, "/images/tiles/woods.png");
+    this.addTileImage(FieldType.Ocean, "/images/tiles/ocean.png");
+    this.addTileImage(FieldType.Mountain, "/images/tiles/mountain.png");
+    this.addTileImage(FieldType.Hills, "/images/tiles/hills.png");
+    this.addTileImage(FieldType.City, "/images/tiles/city.png");
+    this.addTileImage(FieldType.Industry, "/images/tiles/industry.png");
   }
 
   private loadRoadImages(): void {
-    this.addRoadImage("center", "/roads/roadcenter.png");
+    this.addRoadImage("center", "/images/roads/roadcenter.png");
     for (let i = 0; i < 6; i += 1) {
-      this.addRoadImage(String(i), `/roads/road${i}.png`);
+      this.addRoadImage(String(i), `/images/roads/road${i}.png`);
     }
   }
 
@@ -435,28 +435,28 @@ export class CanvasRenderer {
 
   private loadUnitSprites(): void {
     let img = new Image();
-    img.src = "/units/infantry.png";
+    img.src = "/images/units/infantry.png";
     this.unitImages.set("infantry", img);
     img = new Image();
-    img.src = "/units/militarybase.png";
+    img.src = "/images/units/militarybase.png";
     this.unitImages.set("militarybase", img);
     img = new Image();
-    img.src = "/units/machinegun.png";
+    img.src = "/images/units/machinegun.png";
     this.unitImages.set("machinegun", img);
     img = new Image();
-    img.src = "/units/medic.png";
+    img.src = "/images/units/medic.png";
     this.unitImages.set("medic", img);
     img = new Image();
-    img.src = "/units/artillery.png";
+    img.src = "/images/units/artillery.png";
     this.unitImages.set("artillery", img);
     img = new Image();
-    img.src = "/units/cavalry.png";
+    img.src = "/images/units/cavalry.png";
     this.unitImages.set("cavalry", img);
     img = new Image();
-    img.src = "/units/tank.png";
+    img.src = "/images/units/tank.png";
     this.unitImages.set("tank", img);
     img = new Image();
-    img.src = "/units/engineer.png";
+    img.src = "/images/units/engineer.png";
     this.unitImages.set("engineer", img);
   }
 
@@ -464,7 +464,7 @@ export class CanvasRenderer {
     let img = this.flagImages.get(owner);
     if (!img) {
       img = new Image();
-      img.src = `flags/player${owner}.png`;
+      img.src = `/images/flags/player${owner}.png`;
       this.flagImages.set(owner, img);
     }
     return img;
@@ -476,7 +476,7 @@ export class CanvasRenderer {
     let img = this.rankImages.get(clamped);
     if (!img) {
       img = new Image();
-      img.src = `rank/rank${clamped}.png`;
+      img.src = `/images/rank/rank${clamped}.png`;
       this.rankImages.set(clamped, img);
     }
 
