@@ -3,11 +3,19 @@ node_modules/
 dist/
 .vite/
 
+# TypeScript build artifacts
+*.d.ts
+*.d.ts.map
+*.tsbuildinfo
+*.js
+*.js.map
+
 # save game files
 hexagon_save/
 Roads.xcf
 
 # Logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
