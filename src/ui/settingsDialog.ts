@@ -3,6 +3,8 @@ import type { AiDifficulty } from "../core/systems/aiSystem";
 export type SettingsState = {
   fullscreen: boolean;
   aiDifficulty: AiDifficulty;
+  animationsEnabled: boolean;
+  animationSpeed: number;
 };
 
 type SettingsDialogOptions = {
@@ -76,6 +78,60 @@ export function showSettingsDialog(appRoot: HTMLElement, options: SettingsDialog
 
   difficultyRow.append(difficultyLabel, difficultySelect);
 
+  const animationToggleRow = document.createElement("div");
+  animationToggleRow.className = "settings-row";
+
+  const animationToggleLabel = document.createElement("label");
+  animationToggleLabel.className = "settings-label";
+  animationToggleLabel.textContent = "Show Animations";
+  animationToggleLabel.htmlFor = "animations-toggle";
+
+  const animationToggle = document.createElement("input");
+  animationToggle.type = "checkbox";
+  animationToggle.checked = options.initialState.animationsEnabled;
+  animationToggle.className = "settings-checkbox";
+  animationToggle.id = "animations-toggle";
+
+  animationToggleRow.append(animationToggleLabel, animationToggle);
+
+  const animationSpeedRow = document.createElement("div");
+  animationSpeedRow.className = "settings-row";
+
+  const animationSpeedLabel = document.createElement("label");
+  animationSpeedLabel.className = "settings-label";
+  animationSpeedLabel.textContent = "Animation Speed";
+  animationSpeedLabel.htmlFor = "animation-speed-range";
+
+  const animationSpeedControl = document.createElement("div");
+  animationSpeedControl.className = "settings-range";
+
+  const animationSpeedRange = document.createElement("input");
+  animationSpeedRange.type = "range";
+  animationSpeedRange.id = "animation-speed-range";
+  animationSpeedRange.min = "2";
+  animationSpeedRange.max = "12";
+  animationSpeedRange.step = "1";
+  animationSpeedRange.value = String(options.initialState.animationSpeed);
+
+  const animationSpeedValue = document.createElement("span");
+  animationSpeedValue.className = "settings-range-value";
+  animationSpeedValue.textContent = animationSpeedRange.value;
+
+  animationSpeedRange.addEventListener("input", () => {
+    animationSpeedValue.textContent = animationSpeedRange.value;
+  });
+
+  animationToggle.addEventListener("change", () => {
+    animationSpeedRange.disabled = !animationToggle.checked;
+    animationSpeedValue.classList.toggle("is-disabled", animationSpeedRange.disabled);
+  });
+
+  animationSpeedRange.disabled = !animationToggle.checked;
+  animationSpeedValue.classList.toggle("is-disabled", animationSpeedRange.disabled);
+
+  animationSpeedControl.append(animationSpeedRange, animationSpeedValue);
+  animationSpeedRow.append(animationSpeedLabel, animationSpeedControl);
+
   const footer = document.createElement("div");
   footer.className = "dialog-footer settings-dialog-footer";
 
@@ -99,10 +155,12 @@ export function showSettingsDialog(appRoot: HTMLElement, options: SettingsDialog
     options.onApply({
       fullscreen: fullscreenToggle.checked,
       aiDifficulty: difficultySelect.value as AiDifficulty,
+      animationsEnabled: animationToggle.checked,
+      animationSpeed: Number(animationSpeedRange.value),
     });
   });
 
-  form.append(fullscreenRow, difficultyRow);
+  form.append(fullscreenRow, difficultyRow, animationToggleRow, animationSpeedRow);
   footer.append(cancelButton, applyButton);
   content.append(title, form, footer);
   dialog.appendChild(content);

@@ -41,10 +41,11 @@ const appRoot = document.getElementById("app");
 let settingsState: SettingsState = {
   fullscreen: true,
   aiDifficulty: "normal",
+  animationsEnabled: true,
+  animationSpeed: 6,
 };
 
-
-
+game.configureAnimations(settingsState.animationSpeed, settingsState.animationsEnabled);
 
 // Render once initially
 resizeCanvasToDisplaySize(canvas);
@@ -548,6 +549,7 @@ function openSettingsDialog(): void {
     onApply: (nextState) => {
       settingsState = nextState;
       game.configureAi(1, aiDifficultyMultipliers[settingsState.aiDifficulty]);
+      game.configureAnimations(settingsState.animationSpeed, settingsState.animationsEnabled);
       openStartDialog();
     },
     onCancel: () => {

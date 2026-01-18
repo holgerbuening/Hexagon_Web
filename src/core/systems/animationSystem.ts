@@ -1,20 +1,43 @@
 import type { Unit } from "../units/unit";
 
 export class AnimationSystem {
-  private static readonly UNIT_ANIMATION_SPEED = 6;
+  private static readonly DEFAULT_UNIT_ANIMATION_SPEED = 6;
   private static readonly UNIT_ANIMATION_EPSILON = 0.001;
+  private animationSpeed = AnimationSystem.DEFAULT_UNIT_ANIMATION_SPEED;
+  private animationsEnabled = true;
+  
+  public setAnimationSpeed(speed: number): void {
+    if (!Number.isFinite(speed)) {
+      return;
+    }
+    this.animationSpeed = Math.max(0.1, speed);
+  }
+
+  public setAnimationsEnabled(enabled: boolean, units: Unit[]): void {
+    this.animationsEnabled = enabled;
+    if (!enabled) {
+      this.finishAllAnimations(units);
+    }
+  }
 
   public hasActiveUnitAnimations(units: Unit[]): boolean {
+    if (!this.animationsEnabled) {
+      return false;
+    }
     return units.some((unit) => !this.isUnitAtTarget(unit));
   }
 
   public advanceUnitAnimations(units: Unit[], deltaSeconds: number): boolean {
+    if (!this.animationsEnabled) {
+      return this.finishAllAnimations(units);
+    }
+
     if (deltaSeconds <= 0) {
       return false;
     }
 
     let didUpdate = false;
-    const speed = AnimationSystem.UNIT_ANIMATION_SPEED;
+    const speed = this.animationSpeed;
 
     for (const unit of units) {
       if (unit.animationPath.length > 0) {
@@ -83,6 +106,18 @@ export class AnimationSystem {
       didUpdate = true;
     }
 
+    return didUpdate;
+  }
+
+  private finishAllAnimations(units: Unit[]): boolean {
+    let didUpdate = false;
+    for (const unit of units) {
+      if (unit.animationPath.length > 0 || !this.isUnitAtTarget(unit)) {
+        unit.pos = { q: unit.q, r: unit.r };
+        unit.animationPath = [];
+        didUpdate = true;
+      }
+    }
     return didUpdate;
   }
 

@@ -67,7 +67,11 @@ export class GameCore {
   public advanceUnitAnimations(deltaSeconds: number): boolean {
     return this.animationSystem.advanceUnitAnimations(this.state.units, deltaSeconds);
   }
-
+  
+  public configureAnimations(animationSpeed: number, animationsEnabled: boolean): void {
+    this.animationSystem.setAnimationSpeed(animationSpeed);
+    this.animationSystem.setAnimationsEnabled(animationsEnabled, this.state.units);
+  }
 
   public serializeState(): SavedGameState {
     return serializeState(this.state);

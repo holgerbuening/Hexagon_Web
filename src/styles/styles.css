@@ -500,6 +500,27 @@ canvas:active {
   font-size: 15px;
 }
 
+.settings-range {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 220px;
+}
+
+.settings-range input[type="range"] {
+  flex: 1;
+}
+
+.settings-range-value {
+  min-width: 28px;
+  text-align: right;
+  font-weight: 600;
+}
+
+.settings-range-value.is-disabled {
+  opacity: 0.5;
+}
+
 .settings-dialog-footer {
   margin-top: 8px;
 }
