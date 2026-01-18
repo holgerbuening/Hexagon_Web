@@ -56,6 +56,9 @@ openStartDialog();
 
 if (hudSettings) {
   hudSettings.addEventListener("click", () => {
+    if (isInputBlocked()) {
+      return;
+    }
     openStartDialog();
   });
 }
@@ -63,6 +66,9 @@ if (hudSettings) {
 // End turn button
 if (hudEndTurn) {
   hudEndTurn.addEventListener("click", () => {
+    if (isInputBlocked()) {
+      return;
+    }
     game.endTurn();
     renderAll();
   });
@@ -76,6 +82,7 @@ let lastY = 0;
 
 // If mouse moved more than this, treat as drag
 const DRAG_THRESHOLD_PX = 3;
+const isInputBlocked = (): boolean => game.hasActiveUnitAnimations();
 
 // --- Keyboard control state ---
 let panLeft = false;
@@ -98,6 +105,9 @@ const ZOOM_SPEED = 1.8;
 
 
 canvas.addEventListener("mousedown", function (ev) {
+  if (isInputBlocked()) {
+    return;
+  }
   if (ev.button !== 0) {
     return;
   }
@@ -110,6 +120,9 @@ canvas.addEventListener("mousedown", function (ev) {
 });
 
 canvas.addEventListener("mousemove", function (ev) {
+  if (isInputBlocked()) {
+    return;
+  }
   if (!isMouseDown) {
     return;
   }
@@ -139,6 +152,11 @@ canvas.addEventListener("mousemove", function (ev) {
 });
 
 canvas.addEventListener("mouseup", function (ev) {
+  if (isInputBlocked()) {
+    isMouseDown = false;
+    isDragging = false;
+    return;
+  }
   if (ev.button !== 0) {
     return;
   }
@@ -179,7 +197,9 @@ canvas.addEventListener("mouseleave", function () {
 // Wheel zoom
 canvas.addEventListener("wheel", function (ev) {
   ev.preventDefault(); // prevent page scroll
-
+  if (isInputBlocked()) {
+    return;
+  }
   const rect = canvas.getBoundingClientRect();
   const sx = ev.clientX - rect.left;
   const sy = ev.clientY - rect.top;
@@ -269,6 +289,10 @@ window.addEventListener("resize", function () {
 });
 
 window.addEventListener("keydown", function (ev) {
+  if (isInputBlocked()) {
+    return;
+  }
+
   // Existing: Space ends turn
   if (ev.code === "Space" || ev.code === " " || ev.code === "Escape" || ev.code === "KeyP") {
     ev.preventDefault();
@@ -346,15 +370,29 @@ function animationLoop(timeMs: number): void {
   lastFrameTimeMs = timeMs;
 
   let didChange = false;
+  const didAnimateUnits = game.advanceUnitAnimations(dt);
+    if (didAnimateUnits) {
+      didChange = true;
+    }
 
   // Pan movement
   let dx = 0;
   let dy = 0;
 
-  if (panLeft) dx -= 1;
-  if (panRight) dx += 1;
-  if (panUp) dy -= 1;
-  if (panDown) dy += 1;
+  if (!isInputBlocked()) {
+    if (panLeft) dx -= 1;
+    if (panRight) dx += 1;
+    if (panUp) dy -= 1;
+    if (panDown) dy += 1;
+  } else {
+    panLeft = false;
+    panRight = false;
+    panUp = false;
+    panDown = false;
+    zoomIn = false;
+    zoomOut = false;
+    fastMode = false;
+  }
 
   if (dx !== 0 || dy !== 0) {
     // Normalize diagonal speed a bit
@@ -375,11 +413,11 @@ function animationLoop(timeMs: number): void {
   }
 
   // Zoom (smooth exponential)
-  if (zoomIn && !zoomOut) {
+  if (!isInputBlocked()&& zoomIn && !zoomOut) {
     const factor = Math.pow(ZOOM_SPEED, dt);
     renderer.zoomAtCenter(factor);
     didChange = true;
-  } else if (zoomOut && !zoomIn) {
+  } else if (!isInputBlocked() && zoomOut && !zoomIn) {
     const factor = Math.pow(ZOOM_SPEED, dt);
     renderer.zoomAtCenter(1.0 / factor);
     didChange = true;

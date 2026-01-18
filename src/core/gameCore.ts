@@ -13,6 +13,7 @@ import { UNIT_TYPES } from "./units/unitType";
 import { FieldType, getFieldDef } from "./map/fieldTypes";
 import { CombatSystem } from "./systems/combatSystem";
 import { MovementSystem } from "./systems/movementSystem";
+import { AnimationSystem } from "./systems/animationSystem";
 import { MapGenerator } from "./map/mapGenerator";
 import { deserializeState, serializeState } from "./stateSerializer";
 import { AiSystem } from "./systems/aiSystem";
@@ -23,6 +24,7 @@ export class GameCore {
   private tileGrid: HexTile[][]; // 2D array for easy access
   private combatSystem: CombatSystem = new CombatSystem();
   private movementSystem: MovementSystem = new MovementSystem();
+  private animationSystem: AnimationSystem = new AnimationSystem();
   private mapGenerator: MapGenerator = new MapGenerator();
   private aiSystem: AiSystem = new AiSystem(this.movementSystem, this.combatSystem);
   private pendingPurchase: { unitType: UnitType; owner: PlayerId } | null = null;
@@ -57,6 +59,15 @@ export class GameCore {
   public getState(): Readonly<GameState> {
     return this.state;
   }
+  
+  public hasActiveUnitAnimations(): boolean {
+    return this.animationSystem.hasActiveUnitAnimations(this.state.units);
+  }
+
+  public advanceUnitAnimations(deltaSeconds: number): boolean {
+    return this.animationSystem.advanceUnitAnimations(this.state.units, deltaSeconds);
+  }
+
 
   public serializeState(): SavedGameState {
     return serializeState(this.state);

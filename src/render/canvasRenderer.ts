@@ -278,7 +278,7 @@ export class CanvasRenderer {
   }
 
   private drawUnit(unit: Unit): void {
-    const p = axialToPixel(unit.q, unit.r, this.size);
+    const p = axialToPixel(unit.pos.q, unit.pos.r, this.size);
     this.drawUnitFlag(unit, p.x, p.y);
     this.drawUnitRank(unit, p.x, p.y);
     this.drawHpBar(unit, p.x, p.y);
