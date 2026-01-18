@@ -18,6 +18,7 @@ export class Unit {
   acted: boolean = false;
 
   selected: boolean = false;
+  animationPath: Axial[] = [];
 
   constructor(type: UnitType, q: number, r: number, owner: PlayerId) {
     this.type = type;

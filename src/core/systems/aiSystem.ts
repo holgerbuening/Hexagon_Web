@@ -229,10 +229,20 @@ export class AiSystem {
 
     if (!bestMove) return false;
 
+    const path = this.movementSystem.computePathToTarget(
+      state,
+      unit,
+      bestMove,
+      (q, r) => getNeighbors(q, r)
+    );
+
+    if (!path) return false;
+
     const moved = this.movementSystem.tryMoveUsingReachable(state, unit, bestMove, reachableTiles);
 
     if (moved) {
       unit.acted = true;
+      unit.animationPath = path;
     }
 
     return moved;
@@ -270,13 +280,22 @@ export class AiSystem {
     }
 
     if (!bestMove) return false;
+    
+    const path = this.movementSystem.computePathToTarget(
+      state,
+      unit,
+      bestMove,
+      (q, r) => getNeighbors(q, r)
+    );
+
+    if (!path) return false;
 
     const moved = this.movementSystem.tryMoveUsingReachable(state, unit, bestMove, reachableTiles);
 
     if (moved) {
       unit.acted = true;
+      unit.animationPath = path;
     }
-
     return moved;
   }
 

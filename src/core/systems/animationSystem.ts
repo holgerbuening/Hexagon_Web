@@ -17,6 +17,46 @@ export class AnimationSystem {
     const speed = AnimationSystem.UNIT_ANIMATION_SPEED;
 
     for (const unit of units) {
+      if (unit.animationPath.length > 0) {
+        let remainingStep = speed * deltaSeconds;
+
+        while (remainingStep > 0 && unit.animationPath.length > 0) {
+          const next = unit.animationPath[0];
+          if (!next) break;
+
+          const dq = next.q - unit.pos.q;
+          const dr = next.r - unit.pos.r;
+          const dist = Math.sqrt(dq * dq + dr * dr);
+
+          if (dist <= AnimationSystem.UNIT_ANIMATION_EPSILON) {
+            unit.pos = { q: next.q, r: next.r };
+            unit.animationPath.shift();
+            didUpdate = true;
+            continue;
+          }
+
+          if (remainingStep >= dist) {
+            unit.pos = { q: next.q, r: next.r };
+            unit.animationPath.shift();
+            remainingStep -= dist;
+            didUpdate = true;
+            continue;
+          }
+
+          unit.pos = {
+            q: unit.pos.q + (dq / dist) * remainingStep,
+            r: unit.pos.r + (dr / dist) * remainingStep,
+          };
+          didUpdate = true;
+          remainingStep = 0;
+        }
+
+        if (unit.animationPath.length === 0 && !this.isUnitAtTarget(unit)) {
+          unit.pos = { q: unit.q, r: unit.r };
+          didUpdate = true;
+        }
+        continue;
+      }
       const dq = unit.q - unit.pos.q;
       const dr = unit.r - unit.pos.r;
       const dist = Math.sqrt(dq * dq + dr * dr);

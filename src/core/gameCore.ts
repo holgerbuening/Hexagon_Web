@@ -59,7 +59,7 @@ export class GameCore {
   public getState(): Readonly<GameState> {
     return this.state;
   }
-  
+
   public hasActiveUnitAnimations(): boolean {
     return this.animationSystem.hasActiveUnitAnimations(this.state.units);
   }
@@ -419,6 +419,15 @@ export class GameCore {
     const selected = this.state.selectedUnit;
     if (!selected) return false;
 
+    const path = this.movementSystem.computePathToTarget(
+      this.state,
+      selected,
+      pos,
+      (q, r) => this.getNeighbors(q, r)
+    );
+
+    if (!path) return false;
+
     // English comment: Try to move selected unit to clicked tile based on reachable map
     const moved = this.movementSystem.tryMoveUsingReachable(
       this.state,
@@ -428,6 +437,8 @@ export class GameCore {
     );
 
     if (!moved) return false;
+
+    selected.animationPath = path;
 
     // English comment: After a successful move, clear overlays (same behavior as before)
     this.state.reachableTiles = {};

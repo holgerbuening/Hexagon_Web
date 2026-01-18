@@ -143,4 +143,96 @@ export class MovementSystem {
 
     return true;
   }
+
+  public computePathToTarget(
+    state: GameState,
+    unit: Unit,
+    target: Axial,
+    getNeighbors: (q: number, r: number) => HexTile[]
+  ): Axial[] | null {
+    const startQ = unit.q;
+    const startR = unit.r;
+
+    if (startQ === target.q && startR === target.r) {
+      return [];
+    }
+
+    const dist = new Map<string, number>();
+    const prev = new Map<string, Axial>();
+    const open: { q: number; r: number; cost: number }[] = [];
+
+    const startKey = MovementSystem.key(startQ, startR);
+    dist.set(startKey, 0);
+    open.push({ q: startQ, r: startR, cost: 0 });
+
+    while (open.length > 0) {
+      let bestIdx = 0;
+      let bestCost = open[0] ? open[0].cost : 0;
+
+      for (let i = 1; i < open.length; i++) {
+        const entry = open[i];
+        if (!entry) continue;
+        if (entry.cost < bestCost) {
+          bestCost = entry.cost;
+          bestIdx = i;
+        }
+      }
+
+      const current = open.splice(bestIdx, 1)[0];
+      if (!current) continue;
+
+      const ck = MovementSystem.key(current.q, current.r);
+      const currentBest = dist.get(ck);
+      if (currentBest === undefined) continue;
+
+      if (current.cost !== currentBest) {
+        continue;
+      }
+
+      if (current.q === target.q && current.r === target.r) {
+        break;
+      }
+
+      const neighbors = getNeighbors(current.q, current.r);
+      for (const n of neighbors) {
+        if (!this.isPassableForUnit(unit, n)) continue;
+
+        const isStart = n.q === startQ && n.r === startR;
+        if (!isStart && this.isOccupied(state, n.q, n.r)) continue;
+
+        const stepCost = this.getMovementCost(n);
+        const nextCost = current.cost + stepCost;
+
+        if (nextCost > unit.remainingMovement) continue;
+
+        const nk = MovementSystem.key(n.q, n.r);
+        const old = dist.get(nk);
+
+        if (old === undefined || nextCost < old) {
+          dist.set(nk, nextCost);
+          prev.set(nk, { q: current.q, r: current.r });
+          open.push({ q: n.q, r: n.r, cost: nextCost });
+        }
+      }
+    }
+
+    const targetKey = MovementSystem.key(target.q, target.r);
+    if (!dist.has(targetKey)) return null;
+
+    const path: Axial[] = [];
+    let cursor: Axial = { q: target.q, r: target.r };
+
+    while (cursor.q !== startQ || cursor.r !== startR) {
+      path.push({ q: cursor.q, r: cursor.r });
+      const cursorKey = MovementSystem.key(cursor.q, cursor.r);
+      const prevNode = prev.get(cursorKey);
+      if (!prevNode) {
+        return null;
+      }
+      cursor = prevNode;
+    }
+
+    path.reverse();
+    return path;
+  }
 }
