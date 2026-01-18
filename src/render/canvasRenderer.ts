@@ -8,6 +8,11 @@ const SELECT_FILL_COLOR = "rgba(0, 200, 0, 0.25)"; // semi-transparent green
 const SELECT_STROKE_COLOR = "rgba(0, 180, 0, 0.9)";
 const SELECT_STROKE_WIDTH = 3;
 
+const COMBAT_ATTACKER_STROKE = "#00b7ff";
+const COMBAT_ATTACKER_FILL = "rgba(0, 183, 255, 0.2)";
+const COMBAT_DEFENDER_STROKE = "#ff5a5a";
+const COMBAT_DEFENDER_FILL = "rgba(255, 90, 90, 0.2)";
+
 
 
 
@@ -89,6 +94,17 @@ export class CanvasRenderer {
       const r = Number(parts[1]);
 
       this.drawOverlayHex(q, r, "#ff0000", "rgba(255,0,0,0.22)", 3 / this.zoom);
+    }
+
+    const combatKeys = Object.keys(state.combatOverlay);
+    for (const k of combatKeys) {
+      const parts = k.split(",");
+      const q = Number(parts[0]);
+      const r = Number(parts[1]);
+      const role = state.combatOverlay[k];
+      const stroke = role === "attacker" ? COMBAT_ATTACKER_STROKE : COMBAT_DEFENDER_STROKE;
+      const fill = role === "attacker" ? COMBAT_ATTACKER_FILL : COMBAT_DEFENDER_FILL;
+      this.drawOverlayHex(q, r, stroke, fill, 4 / this.zoom);
     }
 
 

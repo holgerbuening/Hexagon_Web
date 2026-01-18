@@ -41,6 +41,7 @@ export function deserializeState(saved: SavedGameState): DeserializedState {
     selectedUnit: null,
     reachableTiles: {},
     attackOverlay: {},
+    combatOverlay: {},
     tiles,
     units,
     playerBalances: [...saved.playerBalances],

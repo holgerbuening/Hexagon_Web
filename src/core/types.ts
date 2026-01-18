@@ -31,6 +31,7 @@ export interface GameState {
   selectedUnit: Unit | null;
   reachableTiles: Record<string, number>;
   attackOverlay: Record<string, true>;
+  combatOverlay: Record<string, "attacker" | "defender">;
   tiles: HexTile[];
   units: Unit[];
   playerBalances: number[];
@@ -92,6 +93,12 @@ export type CombatPreview = {
 
   damageDefender: number;
   damageAttacker: number;
+};
+
+export type CombatPreviewEntry = {
+  preview: CombatPreview;
+  attacker: SavedUnit;
+  defender: SavedUnit;
 };
 
 export type SelectHexResult =

@@ -1,4 +1,4 @@
-import type { Axial, GameState, HexTile, PlayerId } from "../types";
+import type { Axial, CombatPreviewEntry, GameState, HexTile, PlayerId } from "../types";
 import { axialDistance } from "../hexMath";
 import { FieldType } from "../map/fieldTypes";
 import { MovementSystem } from "./movementSystem";
@@ -51,8 +51,9 @@ export class AiSystem {
     getUnitAt: (pos: Axial) => Unit | undefined,
     canAfford: (player: PlayerId, cost: number) => boolean,
     spend: (player: PlayerId, cost: number) => boolean
-  ): void {
-    if (!this.shouldRun(state)) return;
+    ): CombatPreviewEntry[] {
+    if (!this.shouldRun(state)) return [];
+    const combatPreviews: CombatPreviewEntry[] = [];
 
     this.purchaseUnits(state, getNeighbors, getUnitAt, canAfford, spend);
 
@@ -67,10 +68,15 @@ export class AiSystem {
 
       if (unit.hp < 15 && this.tryRetreat(state, unit, getNeighbors)) continue;
 
-      if (this.tryAttack(state, unit, getTile)) continue;
+      const preview = this.tryAttack(state, unit, getTile);
+      if (preview) {
+        combatPreviews.push(preview);
+        continue;
+      }
 
       this.tryMove(state, unit, getNeighbors);
     }
+    return combatPreviews;
   }
 
   private purchaseUnits(
@@ -166,8 +172,8 @@ export class AiSystem {
     state: GameState,
     attacker: Unit,
     getTile: (pos: Axial) => HexTile | undefined
-  ): boolean {
-    if (attacker.acted) return false;
+    ): CombatPreviewEntry | null {
+    if (attacker.acted) return null;
 
     let bestTarget: Unit | null = null;
     let bestDistance = Number.POSITIVE_INFINITY;
@@ -183,14 +189,16 @@ export class AiSystem {
       }
     }
 
-    if (!bestTarget) return false;
+    if (!bestTarget) return null;
 
     attacker.pos = { q: attacker.q, r: attacker.r };
     bestTarget.pos = { q: bestTarget.q, r: bestTarget.r };
 
     const preview = this.combatSystem.computePreview(state, attacker, bestTarget, getTile);
+    const attackerSnapshot = Unit.serialize(attacker);
+    const defenderSnapshot = Unit.serialize(bestTarget);
     this.combatSystem.apply(state, preview);
-    return true;
+    return { preview, attacker: attackerSnapshot, defender: defenderSnapshot };
   }
 
   private tryMove(

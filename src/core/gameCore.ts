@@ -5,6 +5,7 @@ import {
   type PlayerId,
   type CombatPreview,
   type SelectHexResult,
+  type CombatPreviewEntry,
   type SavedGameState,
 } from "./types";
 import  { Unit } from "./units/unit";
@@ -43,6 +44,7 @@ export class GameCore {
       mapHeight: height,
       reachableTiles: {},
       attackOverlay: {},
+      combatOverlay: {},
       tiles: [],
       //tiles: this.createHexDisk(radius),
       //tiles: this.createBaseMap(width, height),
@@ -67,7 +69,7 @@ export class GameCore {
   public advanceUnitAnimations(deltaSeconds: number): boolean {
     return this.animationSystem.advanceUnitAnimations(this.state.units, deltaSeconds);
   }
-  
+
   public configureAnimations(animationSpeed: number, animationsEnabled: boolean): void {
     this.animationSystem.setAnimationSpeed(animationSpeed);
     this.animationSystem.setAnimationsEnabled(animationsEnabled, this.state.units);
@@ -139,14 +141,14 @@ export class GameCore {
     return { kind: "none" };
   }
 
-  public endTurn(): void {
+  public endTurn(): CombatPreviewEntry[] {
       if (this.state.gameOver) {
-        return;
+        return [];
       }
-      this.endTurnInternal(true);
+      return this.endTurnInternal(true);
   }
 
-  private endTurnInternal(allowAiTurn: boolean): void {
+  private endTurnInternal(allowAiTurn: boolean): CombatPreviewEntry[] {
     this.resetUnitsOfPlayer(this.state.currentPlayer);
     this.applyTurnIncome(this.state.currentPlayer);
     this.state.turn += 1;
@@ -156,9 +158,10 @@ export class GameCore {
     this.state.selectedUnit = null;
     this.state.attackOverlay = {};
     this.state.reachableTiles = {};
+    this.state.combatOverlay = {};
     
     if (allowAiTurn && this.aiSystem.shouldRun(this.state)) {
-      this.aiSystem.runTurn(
+      const previews = this.aiSystem.runTurn(
         this.state,
         (pos) => this.getTile(pos),
         (q, r) => this.getNeighbors(q, r),
@@ -167,7 +170,9 @@ export class GameCore {
         (player, cost) => this.spend(player, cost)
       );
       this.endTurnInternal(false);
+      return previews;
     }
+    return [];
   }
 
   // --- helpers ---
@@ -295,6 +300,20 @@ export class GameCore {
     this.state.selectedUnit = null;
     this.state.attackOverlay = {};
     this.state.reachableTiles = {};
+    this.state.combatOverlay = {};
+  }
+
+  public setCombatOverlay(attackerPos: Axial, defenderPos: Axial): void {
+    const attackerKey = MovementSystem.key(attackerPos.q, attackerPos.r);
+    const defenderKey = MovementSystem.key(defenderPos.q, defenderPos.r);
+    this.state.combatOverlay = {
+      [attackerKey]: "attacker",
+      [defenderKey]: "defender",
+    };
+  }
+
+  public clearCombatOverlay(): void {
+    this.state.combatOverlay = {};
   }
 
   private clearSelectionAndOverlays(clearSelectedHex: boolean): void {
@@ -306,6 +325,7 @@ export class GameCore {
     this.state.selectedUnit = null;
     this.state.reachableTiles = {};
     this.state.attackOverlay = {};
+    this.state.combatOverlay = {};  
   }
 
   private evaluateGameOver(attackerOwner: PlayerId): void {
@@ -344,6 +364,7 @@ export class GameCore {
       this.state.selectedUnit = null;
       this.state.reachableTiles = {};
       this.state.attackOverlay = {};
+      this.state.combatOverlay = {};
       return { kind: "headquarter", unit };
     }
     
@@ -367,6 +388,7 @@ export class GameCore {
     } else {
       this.state.reachableTiles = {};
       this.state.attackOverlay = {};
+      this.state.combatOverlay = {};
     }
 
     return { kind: "none" };
@@ -447,6 +469,7 @@ export class GameCore {
     // English comment: After a successful move, clear overlays (same behavior as before)
     this.state.reachableTiles = {};
     this.state.attackOverlay = {};
+    this.state.combatOverlay = {};
     this.state.selectedUnit = null;
     return true;
   }
@@ -479,6 +502,7 @@ export class GameCore {
     // English comment: Clear overlays like your previous implementation (Qt-like behavior)
     this.state.reachableTiles = {};
     this.state.attackOverlay = {};
+    this.state.combatOverlay = {};
     this.state.selectedUnit = null;
 
     return preview;
@@ -504,6 +528,7 @@ export class GameCore {
     this.state.selectedUnit = null;
     this.state.reachableTiles = {};
     this.state.attackOverlay = {};
+    this.state.combatOverlay = {};
   }
 
   public startNewGame(): void {
@@ -518,6 +543,7 @@ export class GameCore {
     this.state.selectedUnit = null;
     this.state.reachableTiles = {};
     this.state.attackOverlay = {};
+    this.state.combatOverlay = {};
     this.state.units = [];
     this.state.tiles = [];
     this.createNewMap(this.state.mapWidth, this.state.mapHeight);
@@ -547,6 +573,7 @@ export class GameCore {
     this.pendingPurchase = { unitType, owner: hqUnit.owner };
     this.state.selectedUnit = null;
     this.state.attackOverlay = {};
+    this.state.combatOverlay = {};
 
     const probeUnit = new Unit(unitType, hqUnit.q, hqUnit.r, hqUnit.owner);
     this.state.reachableTiles = this.movementSystem.computeReachableTiles(
@@ -559,6 +586,7 @@ export class GameCore {
   public cancelPurchase(): void {
     this.pendingPurchase = null;
     this.state.reachableTiles = {};
+    this.state.combatOverlay = {};
   }
 
   private handlePurchasePlacement(pos: Axial): boolean {
@@ -577,6 +605,7 @@ export class GameCore {
     this.pendingPurchase = null;
     this.state.reachableTiles = {};
     this.state.selectedHex = { q: pos.q, r: pos.r };
+    this.state.combatOverlay = {};
     return true;
   }
 

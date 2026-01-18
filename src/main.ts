@@ -1,7 +1,7 @@
 import { GameCore } from "./core/gameCore";
 import { pixelToAxial } from "./core/hexMath";
-import type { CombatPreview, PlayerId, SelectHexResult} from "./core/types";
-import type { Unit } from "./core/units/unit";
+import type { CombatPreview, CombatPreviewEntry, PlayerId, SelectHexResult} from "./core/types";
+import { Unit } from "./core/units/unit";
 import { MovementAudioController } from "./audio/movementAudio";
 import { CanvasRenderer } from "./render/canvasRenderer";
 import { showCombatDialog } from "./ui/combatDialog";
@@ -81,8 +81,11 @@ if (hudEndTurn) {
     if (isInputBlocked()) {
       return;
     }
-    game.endTurn();
+    const aiPreviews = game.endTurn();
     renderAll();
+    if (aiPreviews.length > 0) {
+      showAiCombatDialogs(aiPreviews);
+    }
   });
 }
 
@@ -484,9 +487,12 @@ function combatDialog(preview: CombatPreview): void {
       const defender = game.getUnitAt(preview.defenderPos);
       //console.log("Attacker:", attacker, "Defender:", defender);
       if (attacker && defender) {
+        game.setCombatOverlay(preview.attackerPos, preview.defenderPos);
+        renderAll();
         showCombatDialog(appRoot, attacker, defender, preview, {
           onOk: () => {
             game.applyCombat(preview);
+            game.clearCombatOverlay();
             renderAll();
             const state = game.getState();
             if (state.gameOver && state.winner !== null) {
@@ -497,6 +503,42 @@ function combatDialog(preview: CombatPreview): void {
         });
       }
     }
+}
+
+function showAiCombatDialogs(previews: CombatPreviewEntry[]): void {
+  if (!appRoot) {
+    return;
+  }
+
+  const queue = [...previews];
+
+  const showNext = () => {
+    const entry = queue.shift();
+    if (!entry) {
+      return;
+    }
+
+    const attacker = Unit.fromSaved(entry.attacker);
+    const defender = Unit.fromSaved(entry.defender);
+    game.setCombatOverlay(entry.preview.attackerPos, entry.preview.defenderPos);
+    renderer.centerOnAxial(entry.preview.attackerPos.q, entry.preview.attackerPos.r);
+    renderAll();
+
+    showCombatDialog(appRoot, attacker, defender, entry.preview, {
+      onOk: () => {
+        game.clearCombatOverlay();
+        renderAll();
+        const state = game.getState();
+        if (state.gameOver && state.winner !== null) {
+          openWinDialog(state.winner);
+          return;
+        }
+        showNext();
+      },
+    });
+  };
+
+  showNext();
 }
 
 function headquarterDialog(result: SelectHexResult ): void {
