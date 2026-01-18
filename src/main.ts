@@ -1,6 +1,7 @@
 import { GameCore } from "./core/gameCore";
 import { pixelToAxial } from "./core/hexMath";
 import type { CombatPreview, PlayerId, SelectHexResult} from "./core/types";
+import type { Unit } from "./core/units/unit";
 import { CanvasRenderer } from "./render/canvasRenderer";
 import { showCombatDialog } from "./ui/combatDialog";
 import { showHeadquarterDialog } from "./ui/headquarterDialog";
@@ -16,7 +17,9 @@ const canvas = document.getElementById("game") as HTMLCanvasElement;
 const renderer = new CanvasRenderer(canvas, BASE_HEX_SIZE);
 const game = new GameCore(20,20); // 20x20 map
 renderer.setInvalidateHandler(renderAll);
-
+const AI_PLAYER_ID: PlayerId = 1;
+const UNIT_ANIMATION_EPSILON = 0.001;
+const centeredAiUnits = new Set<Unit>();
 
 // HUD elements
 const hudTurn = document.getElementById("hudTurn") as HTMLSpanElement;
@@ -370,6 +373,10 @@ function animationLoop(timeMs: number): void {
   lastFrameTimeMs = timeMs;
 
   let didChange = false;
+  const didFocusAiMovement = focusOnAiMoveStart();
+  if (didFocusAiMovement) {
+    didChange = true;
+  }
   const didAnimateUnits = game.advanceUnitAnimations(dt);
     if (didAnimateUnits) {
       didChange = true;
@@ -428,6 +435,35 @@ function animationLoop(timeMs: number): void {
   }
 
   requestAnimationFrame(animationLoop);
+}
+
+function focusOnAiMoveStart(): boolean {
+  const state = game.getState();
+  let didFocus = false;
+
+  for (const unit of state.units) {
+    const atTarget =
+      Math.abs(unit.pos.q - unit.q) <= UNIT_ANIMATION_EPSILON &&
+      Math.abs(unit.pos.r - unit.r) <= UNIT_ANIMATION_EPSILON;
+    if (atTarget && centeredAiUnits.has(unit)) {
+      centeredAiUnits.delete(unit);
+    }
+  }
+
+  for (const unit of state.units) {
+    if (unit.owner !== AI_PLAYER_ID) {
+      continue;
+    }
+
+    if (unit.animationPath.length > 0 && !centeredAiUnits.has(unit)) {
+      renderer.centerOnAxial(unit.pos.q, unit.pos.r);
+      centeredAiUnits.add(unit);
+      didFocus = true;
+      break;
+    }
+  }
+
+  return didFocus;
 }
 
 function combatDialog(preview: CombatPreview): void {
