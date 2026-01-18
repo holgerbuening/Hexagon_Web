@@ -5,6 +5,8 @@ export type SettingsState = {
   aiDifficulty: AiDifficulty;
   animationsEnabled: boolean;
   animationSpeed: number;
+  soundEffectsEnabled: boolean;
+  soundEffectsVolume: number;
 };
 
 type SettingsDialogOptions = {
@@ -132,6 +134,60 @@ export function showSettingsDialog(appRoot: HTMLElement, options: SettingsDialog
   animationSpeedControl.append(animationSpeedRange, animationSpeedValue);
   animationSpeedRow.append(animationSpeedLabel, animationSpeedControl);
 
+  const soundToggleRow = document.createElement("div");
+  soundToggleRow.className = "settings-row";
+
+  const soundToggleLabel = document.createElement("label");
+  soundToggleLabel.className = "settings-label";
+  soundToggleLabel.textContent = "Sound Effects";
+  soundToggleLabel.htmlFor = "sound-effects-toggle";
+
+  const soundToggle = document.createElement("input");
+  soundToggle.type = "checkbox";
+  soundToggle.checked = options.initialState.soundEffectsEnabled;
+  soundToggle.className = "settings-checkbox";
+  soundToggle.id = "sound-effects-toggle";
+
+  soundToggleRow.append(soundToggleLabel, soundToggle);
+
+  const soundVolumeRow = document.createElement("div");
+  soundVolumeRow.className = "settings-row";
+
+  const soundVolumeLabel = document.createElement("label");
+  soundVolumeLabel.className = "settings-label";
+  soundVolumeLabel.textContent = "Sound Volume";
+  soundVolumeLabel.htmlFor = "sound-effects-volume";
+
+  const soundVolumeControl = document.createElement("div");
+  soundVolumeControl.className = "settings-range";
+
+  const soundVolumeRange = document.createElement("input");
+  soundVolumeRange.type = "range";
+  soundVolumeRange.id = "sound-effects-volume";
+  soundVolumeRange.min = "0";
+  soundVolumeRange.max = "100";
+  soundVolumeRange.step = "5";
+  soundVolumeRange.value = String(Math.round(options.initialState.soundEffectsVolume * 100));
+
+  const soundVolumeValue = document.createElement("span");
+  soundVolumeValue.className = "settings-range-value";
+  soundVolumeValue.textContent = soundVolumeRange.value;
+
+  soundVolumeRange.addEventListener("input", () => {
+    soundVolumeValue.textContent = soundVolumeRange.value;
+  });
+
+  soundToggle.addEventListener("change", () => {
+    soundVolumeRange.disabled = !soundToggle.checked;
+    soundVolumeValue.classList.toggle("is-disabled", soundVolumeRange.disabled);
+  });
+
+  soundVolumeRange.disabled = !soundToggle.checked;
+  soundVolumeValue.classList.toggle("is-disabled", soundVolumeRange.disabled);
+
+  soundVolumeControl.append(soundVolumeRange, soundVolumeValue);
+  soundVolumeRow.append(soundVolumeLabel, soundVolumeControl);
+  
   const footer = document.createElement("div");
   footer.className = "dialog-footer settings-dialog-footer";
 
@@ -157,10 +213,19 @@ export function showSettingsDialog(appRoot: HTMLElement, options: SettingsDialog
       aiDifficulty: difficultySelect.value as AiDifficulty,
       animationsEnabled: animationToggle.checked,
       animationSpeed: Number(animationSpeedRange.value),
+      soundEffectsEnabled: soundToggle.checked,
+      soundEffectsVolume: Number(soundVolumeRange.value) / 100,
     });
   });
 
-  form.append(fullscreenRow, difficultyRow, animationToggleRow, animationSpeedRow);
+  form.append(
+    fullscreenRow,
+    difficultyRow,
+    animationToggleRow,
+    animationSpeedRow,
+    soundToggleRow,
+    soundVolumeRow,
+  );
   footer.append(cancelButton, applyButton);
   content.append(title, form, footer);
   dialog.appendChild(content);

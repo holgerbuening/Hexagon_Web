@@ -1,7 +1,7 @@
 import type { Unit } from "../units/unit";
 
 export class AnimationSystem {
-  private static readonly DEFAULT_UNIT_ANIMATION_SPEED = 6;
+  private static readonly DEFAULT_UNIT_ANIMATION_SPEED = 2;
   private static readonly UNIT_ANIMATION_EPSILON = 0.001;
   private animationSpeed = AnimationSystem.DEFAULT_UNIT_ANIMATION_SPEED;
   private animationsEnabled = true;

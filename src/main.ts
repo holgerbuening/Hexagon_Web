@@ -2,6 +2,7 @@ import { GameCore } from "./core/gameCore";
 import { pixelToAxial } from "./core/hexMath";
 import type { CombatPreview, PlayerId, SelectHexResult} from "./core/types";
 import type { Unit } from "./core/units/unit";
+import { MovementAudioController } from "./audio/movementAudio";
 import { CanvasRenderer } from "./render/canvasRenderer";
 import { showCombatDialog } from "./ui/combatDialog";
 import { showHeadquarterDialog } from "./ui/headquarterDialog";
@@ -42,10 +43,17 @@ let settingsState: SettingsState = {
   fullscreen: true,
   aiDifficulty: "normal",
   animationsEnabled: true,
-  animationSpeed: 6,
+  animationSpeed: 2,
+  soundEffectsEnabled: true,
+  soundEffectsVolume: 0.7,
 };
 
 game.configureAnimations(settingsState.animationSpeed, settingsState.animationsEnabled);
+const movementAudio = new MovementAudioController({
+  enabled: settingsState.soundEffectsEnabled,
+  volume: settingsState.soundEffectsVolume,
+});
+
 
 // Render once initially
 resizeCanvasToDisplaySize(canvas);
@@ -379,9 +387,10 @@ function animationLoop(timeMs: number): void {
     didChange = true;
   }
   const didAnimateUnits = game.advanceUnitAnimations(dt);
-    if (didAnimateUnits) {
-      didChange = true;
-    }
+  if (didAnimateUnits) {
+    didChange = true;
+  }
+  movementAudio.update(game.getState().units);
 
   // Pan movement
   let dx = 0;
@@ -550,6 +559,8 @@ function openSettingsDialog(): void {
       settingsState = nextState;
       game.configureAi(1, aiDifficultyMultipliers[settingsState.aiDifficulty]);
       game.configureAnimations(settingsState.animationSpeed, settingsState.animationsEnabled);
+      movementAudio.setEnabled(settingsState.soundEffectsEnabled);
+      movementAudio.setVolume(settingsState.soundEffectsVolume);
       openStartDialog();
     },
     onCancel: () => {
