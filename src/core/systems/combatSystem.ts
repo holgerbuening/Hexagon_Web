@@ -113,8 +113,7 @@ export class CombatSystem {
     if (!attacker) return;
     if (!defender) return;
 
-    // English comment: Only allow if attacker is current player and not acted
-    if (attacker.owner !== state.currentPlayer) return;
+  // English comment: Only allow if attacker has not acted yet
     if (attacker.acted) return;
 
     defender.hp = defender.hp - preview.damageDefender;

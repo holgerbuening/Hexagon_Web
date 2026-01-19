@@ -197,7 +197,6 @@ export class AiSystem {
     const preview = this.combatSystem.computePreview(state, attacker, bestTarget, getTile);
     const attackerSnapshot = Unit.serialize(attacker);
     const defenderSnapshot = Unit.serialize(bestTarget);
-    this.combatSystem.apply(state, preview);
     return { preview, attacker: attackerSnapshot, defender: defenderSnapshot };
   }
 

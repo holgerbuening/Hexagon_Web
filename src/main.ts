@@ -20,6 +20,9 @@ const game = new GameCore(20,20); // 20x20 map
 renderer.setInvalidateHandler(renderAll);
 const AI_PLAYER_ID: PlayerId = 1;
 const UNIT_ANIMATION_EPSILON = 0.001;
+const AI_COMBAT_ZOOM_TARGET = 1.8;
+const AI_COMBAT_ZOOM_DURATION_MS = 450;
+const AI_COMBAT_DIALOG_DELAY_MS = 1500;
 const centeredAiUnits = new Set<Unit>();
 
 // HUD elements
@@ -505,6 +508,40 @@ function combatDialog(preview: CombatPreview): void {
     }
 }
 
+function animateZoomTo(
+  targetZoom: number,
+  durationMs: number,
+  onComplete: () => void
+): void {
+  const startZoom = renderer.getZoom();
+  if (Math.abs(targetZoom - startZoom) < 0.001 || durationMs <= 0) {
+    onComplete();
+    return;
+  }
+
+  const startTime = performance.now();
+  const step = (now: number) => {
+    const elapsed = now - startTime;
+    const t = Math.min(elapsed / durationMs, 1);
+    const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    const nextZoom = startZoom + (targetZoom - startZoom) * eased;
+    const currentZoom = renderer.getZoom();
+    const zoomFactor = nextZoom / currentZoom;
+    if (Math.abs(zoomFactor - 1) > 0.0001) {
+      renderer.zoomAtCenter(zoomFactor);
+      renderAll();
+    }
+    if (t < 1) {
+      requestAnimationFrame(step);
+    } else {
+      onComplete();
+    }
+  };
+
+  requestAnimationFrame(step);
+}
+
+
 function showAiCombatDialogs(previews: CombatPreviewEntry[]): void {
   if (!appRoot) {
     return;
@@ -512,7 +549,7 @@ function showAiCombatDialogs(previews: CombatPreviewEntry[]): void {
 
   const queue = [...previews];
 
-  const showNext = () => {
+  const showNext = async () => {
     const entry = queue.shift();
     if (!entry) {
       return;
@@ -524,18 +561,34 @@ function showAiCombatDialogs(previews: CombatPreviewEntry[]): void {
     renderer.centerOnAxial(entry.preview.attackerPos.q, entry.preview.attackerPos.r);
     renderAll();
 
-    showCombatDialog(appRoot, attacker, defender, entry.preview, {
-      onOk: () => {
-        game.clearCombatOverlay();
-        renderAll();
-        const state = game.getState();
-        if (state.gameOver && state.winner !== null) {
-          openWinDialog(state.winner);
-          return;
-        }
-        showNext();
-      },
-    });
+   
+
+    const currentZoom = renderer.getZoom();
+    const showDialog = () => {
+      showCombatDialog(appRoot, attacker, defender, entry.preview, {
+        onOk: () => {
+          game.applyCombat(entry.preview);
+          game.clearCombatOverlay();
+          renderAll();
+          const state = game.getState();
+          if (state.gameOver && state.winner !== null) {
+            openWinDialog(state.winner);
+            return;
+          }
+          showNext();
+        },
+      });
+    };
+
+    const startDialogDelay = () => {
+      window.setTimeout(showDialog, AI_COMBAT_DIALOG_DELAY_MS);
+    };
+
+    if (currentZoom < AI_COMBAT_ZOOM_TARGET) {
+      animateZoomTo(AI_COMBAT_ZOOM_TARGET, AI_COMBAT_ZOOM_DURATION_MS, startDialogDelay);
+    } else {
+      startDialogDelay();
+    }
   };
 
   showNext();
