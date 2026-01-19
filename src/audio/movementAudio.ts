@@ -15,6 +15,11 @@ type MovementAudioState = {
   isPlaying: boolean;
 };
 
+type FxAudioConfig = {
+  enabled: boolean;
+  volume: number;
+};
+
 export class MovementAudioController {
   private enabled: boolean;
   private volume: number;
@@ -121,6 +126,47 @@ export class MovementAudioController {
     for (const audio of Object.values(this.audio)) {
       audio.element.volume = this.volume;
     }
+  }
+
+  private clampVolume(volume: number): number {
+    if (!Number.isFinite(volume)) {
+      return 1;
+    }
+    return Math.min(1, Math.max(0, volume));
+  }
+}
+
+  export class FxAudioController {
+  private enabled: boolean;
+  private volume: number;
+  private readonly unitDestroyedAudio: HTMLAudioElement;
+
+  constructor(config: FxAudioConfig) {
+    this.enabled = config.enabled;
+    this.volume = this.clampVolume(config.volume);
+    this.unitDestroyedAudio = new Audio("/sounds/blop.ogg");
+    this.applyVolume();
+  }
+
+  public setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
+  }
+
+  public setVolume(volume: number): void {
+    this.volume = this.clampVolume(volume);
+    this.applyVolume();
+  }
+
+  public playUnitDestroyed(): void {
+    if (!this.enabled) {
+      return;
+    }
+    this.unitDestroyedAudio.currentTime = 0;
+    void this.unitDestroyedAudio.play().catch(() => undefined);
+  }
+
+  private applyVolume(): void {
+    this.unitDestroyedAudio.volume = this.volume;
   }
 
   private clampVolume(volume: number): number {

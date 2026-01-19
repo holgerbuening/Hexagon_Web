@@ -290,10 +290,10 @@ export class GameCore {
     }
   }
  
-  public applyCombat(preview: CombatPreview): void {
+  public applyCombat(preview: CombatPreview): number {
     const attacker = this.getUnitAt(preview.attackerPos);
     const attackerOwner = attacker?.owner ?? this.state.currentPlayer;
-    this.combatSystem.apply(this.state, preview);
+    const destroyedUnits = this.combatSystem.apply(this.state, preview);
     this.evaluateGameOver(attackerOwner);
 
     // Clear selection/overlays after combat (UI/interaction belongs in GameCore)
@@ -301,6 +301,7 @@ export class GameCore {
     this.state.attackOverlay = {};
     this.state.reachableTiles = {};
     this.state.combatOverlay = {};
+    return destroyedUnits;
   }
 
   public setCombatOverlay(attackerPos: Axial, defenderPos: Axial): void {

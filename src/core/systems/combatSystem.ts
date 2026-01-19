@@ -13,9 +13,11 @@ export class CombatSystem {
     return undefined;
   }
 
-  private removeDeadUnits(state: GameState): void {
+  private removeDeadUnits(state: GameState): Unit[] {
     // English comment: Remove units with hp <= 0
+    const removed = state.units.filter((u) => u.hp <= 0);
     state.units = state.units.filter((u) => u.hp > 0);
+    return removed;
   }
 
   public computePreview(
@@ -104,18 +106,17 @@ export class CombatSystem {
     };
   }
 
-  public apply(state: GameState, preview: CombatPreview): void {
+  public apply(state: GameState, preview: CombatPreview): number {
     // English comment: Apply combat results only after OK in dialog
 
     const attacker = this.getUnitAt(state, preview.attackerPos);
     const defender = this.getUnitAt(state, preview.defenderPos);
 
-    if (!attacker) return;
-    if (!defender) return;
+    if (!attacker) return 0;
+    if (!defender) return 0;
 
   // English comment: Only allow if attacker has not acted yet
-    if (attacker.acted) return;
-
+    if (attacker.acted) return 0;
     defender.hp = defender.hp - preview.damageDefender;
     attacker.hp = attacker.hp - preview.damageAttacker;
 
@@ -127,7 +128,8 @@ export class CombatSystem {
 
     attacker.acted = true;
 
-    this.removeDeadUnits(state);
+    const removedUnits = this.removeDeadUnits(state);
+    return removedUnits.length;
   }
 
   public computeAttackOverlayForUnit(state: GameState, unit: Unit): Record<string, true> {

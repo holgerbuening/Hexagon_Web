@@ -2,7 +2,7 @@ import { GameCore } from "./core/gameCore";
 import { pixelToAxial } from "./core/hexMath";
 import type { CombatPreview, CombatPreviewEntry, PlayerId, SelectHexResult} from "./core/types";
 import { Unit } from "./core/units/unit";
-import { MovementAudioController } from "./audio/movementAudio";
+import { FxAudioController, MovementAudioController } from "./audio/movementAudio";
 import { CanvasRenderer } from "./render/canvasRenderer";
 import { showCombatDialog } from "./ui/combatDialog";
 import { showHeadquarterDialog } from "./ui/headquarterDialog";
@@ -53,6 +53,10 @@ let settingsState: SettingsState = {
 
 game.configureAnimations(settingsState.animationSpeed, settingsState.animationsEnabled);
 const movementAudio = new MovementAudioController({
+  enabled: settingsState.soundEffectsEnabled,
+  volume: settingsState.soundEffectsVolume,
+});
+const fxAudio = new FxAudioController({
   enabled: settingsState.soundEffectsEnabled,
   volume: settingsState.soundEffectsVolume,
 });
@@ -494,7 +498,10 @@ function combatDialog(preview: CombatPreview): void {
         renderAll();
         showCombatDialog(appRoot, attacker, defender, preview, {
           onOk: () => {
-            game.applyCombat(preview);
+            const destroyedUnits = game.applyCombat(preview);
+            if (destroyedUnits > 0) {
+              fxAudio.playUnitDestroyed();
+            }
             game.clearCombatOverlay();
             renderAll();
             const state = game.getState();
@@ -567,7 +574,10 @@ function showAiCombatDialogs(previews: CombatPreviewEntry[]): void {
     const showDialog = () => {
       showCombatDialog(appRoot, attacker, defender, entry.preview, {
         onOk: () => {
-          game.applyCombat(entry.preview);
+          const destroyedUnits = game.applyCombat(entry.preview);
+          if (destroyedUnits > 0) {
+            fxAudio.playUnitDestroyed();
+          }
           game.clearCombatOverlay();
           renderAll();
           const state = game.getState();
@@ -656,6 +666,8 @@ function openSettingsDialog(): void {
       game.configureAnimations(settingsState.animationSpeed, settingsState.animationsEnabled);
       movementAudio.setEnabled(settingsState.soundEffectsEnabled);
       movementAudio.setVolume(settingsState.soundEffectsVolume);
+      fxAudio.setEnabled(settingsState.soundEffectsEnabled);
+      fxAudio.setVolume(settingsState.soundEffectsVolume);
       openStartDialog();
     },
     onCancel: () => {
