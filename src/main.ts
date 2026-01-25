@@ -101,6 +101,14 @@ let isMouseDown = false;
 let isDragging = false;
 let lastX = 0;
 let lastY = 0;
+let isTouchDown = false;
+let isTouchDragging = false;
+let isPinchZooming = false;
+let lastTouchX = 0;
+let lastTouchY = 0;
+let lastPinchDistance = 0;
+let touchStartedInCanvas = false;
+
 
 // If mouse moved more than this, treat as drag
 const DRAG_THRESHOLD_PX = 3;
@@ -216,6 +224,154 @@ canvas.addEventListener("mouseleave", function () {
   isDragging = false;
 });
 
+function getTouchPoint(touch: Touch): { x: number; y: number } {
+  const rect = canvas.getBoundingClientRect();
+  return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+}
+
+function getTouchDistance(t1: Touch, t2: Touch): number {
+  const p1 = getTouchPoint(t1);
+  const p2 = getTouchPoint(t2);
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  return Math.hypot(dx, dy);
+}
+
+function getTouchCenter(t1: Touch, t2: Touch): { x: number; y: number } {
+  const p1 = getTouchPoint(t1);
+  const p2 = getTouchPoint(t2);
+  return { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+}
+
+canvas.addEventListener("touchstart", function (ev) {
+  if (isInputBlocked()) {
+    return;
+  }
+  if (ev.touches.length === 1 ) {
+    const touch = ev.touches[0];
+     if (!touch) {
+      return;
+    }
+    const point = getTouchPoint(touch);
+    isTouchDown = true;
+    isTouchDragging = false;
+    isPinchZooming = false;
+    lastTouchX = point.x;
+    lastTouchY = point.y;
+    touchStartedInCanvas = true;
+  } else if (ev.touches.length === 2) {
+    isTouchDown = false;
+    isTouchDragging = false;
+    isPinchZooming = true;
+    lastPinchDistance = getTouchDistance(ev.touches[0]!, ev.touches[1]!);
+    touchStartedInCanvas = true;
+  }
+}, { passive: true });
+
+canvas.addEventListener("touchmove", function (ev) {
+  if (isInputBlocked()) {
+    return;
+  }
+  if (!touchStartedInCanvas) {
+    return;
+  }
+  ev.preventDefault();
+
+  if (ev.touches.length === 1 && !isPinchZooming) {
+    const touch = ev.touches[0];
+    const point = getTouchPoint(touch!);
+    const dx = point.x - lastTouchX;
+    const dy = point.y - lastTouchY;
+
+    if (!isTouchDragging) {
+      const dist = Math.abs(dx) + Math.abs(dy);
+      if (dist >= DRAG_THRESHOLD_PX) {
+        isTouchDragging = true;
+      }
+    }
+
+    if (isTouchDragging) {
+      renderer.panBy(dx, dy);
+      renderAll();
+    }
+
+    lastTouchX = point.x;
+    lastTouchY = point.y;
+  } else if (ev.touches.length === 2) {
+    const distance = getTouchDistance(ev.touches[0]!, ev.touches[1]!);
+    const center = getTouchCenter(ev.touches[0]!, ev.touches[1]!);
+
+    if (lastPinchDistance > 0) {
+      const zoomFactor = distance / lastPinchDistance;
+      if (Math.abs(zoomFactor - 1) > 0.0001) {
+        renderer.zoomAtScreenPoint(center.x, center.y, zoomFactor);
+        renderAll();
+      }
+    }
+
+    isPinchZooming = true;
+    isTouchDown = false;
+    lastPinchDistance = distance;
+  }
+}, { passive: false });
+
+canvas.addEventListener("touchend", function (ev) {
+  if (isInputBlocked()) {
+    isTouchDown = false;
+    isTouchDragging = false;
+    isPinchZooming = false;
+    touchStartedInCanvas = false;
+    return;
+  }
+
+  if (ev.touches.length === 0) {
+    const wasDragging = isTouchDragging;
+    const wasPinching = isPinchZooming;
+    isTouchDown = false;
+    isTouchDragging = false;
+    isPinchZooming = false;
+    touchStartedInCanvas = false;
+
+    if (wasDragging || wasPinching) {
+      return;
+    }
+
+    const touch = ev.changedTouches[0];
+    if (!touch) {
+      return;
+    }
+    const point = getTouchPoint(touch);
+    const world = renderer.screenToWorld(point.x, point.y);
+    const hex = pixelToAxial(world.x, world.y, renderer.getHexSize());
+    const res = game.selectHex(hex);
+    if (res.kind === "combat") {
+      combatDialog(res.preview);
+    } else if (res.kind === "headquarter") {
+      headquarterDialog(res);
+    } else {
+      renderAll();
+    }
+  } else if (ev.touches.length === 1) {
+    const touch = ev.touches[0];
+    if (!touch) {
+      return;
+    }
+    const point = getTouchPoint(touch);
+    isTouchDown = true;
+    isTouchDragging = false;
+    isPinchZooming = false;
+    lastTouchX = point.x;
+    lastTouchY = point.y;
+    touchStartedInCanvas = true;
+  }
+}, { passive: true });
+
+canvas.addEventListener("touchcancel", function () {
+  isTouchDown = false;
+  isTouchDragging = false;
+  isPinchZooming = false;
+  touchStartedInCanvas = false;
+});
 // Wheel zoom
 canvas.addEventListener("wheel", function (ev) {
   ev.preventDefault(); // prevent page scroll
