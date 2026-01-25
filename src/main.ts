@@ -218,6 +218,7 @@ canvas.addEventListener("mouseup", function (ev) {
     renderAll();
   }
 });
+
 // Stop dragging if mouse leaves canvas
 canvas.addEventListener("mouseleave", function () {
   isMouseDown = false;
@@ -372,6 +373,7 @@ canvas.addEventListener("touchcancel", function () {
   isPinchZooming = false;
   touchStartedInCanvas = false;
 });
+
 // Wheel zoom
 canvas.addEventListener("wheel", function (ev) {
   ev.preventDefault(); // prevent page scroll
