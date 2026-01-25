@@ -6,6 +6,26 @@ import { CombatSystem } from "./combatSystem";
 import { Unit } from "../units/unit";
 import { UnitType, UNIT_TYPES } from "../units/unitType";
 
+interface GetTile {
+  (pos: Axial): HexTile | undefined;
+}
+
+interface GetNeighbors {
+  (q: number, r: number): HexTile[];
+}
+
+interface GetUnitAt {
+  (pos: Axial): Unit | undefined;
+}
+
+interface CanAfford {
+  (player: PlayerId, cost: number): boolean;
+}
+
+interface Spend {
+  (player: PlayerId, cost: number): boolean;
+}
+
 export type AiDifficulty = "easy" | "normal" | "hard";
 
 export const aiDifficultyMultipliers: Record<AiDifficulty, number> = {
@@ -46,11 +66,11 @@ export class AiSystem {
 
   public runTurn(
     state: GameState,
-    getTile: (pos: Axial) => HexTile | undefined,
-    getNeighbors: (q: number, r: number) => HexTile[],
-    getUnitAt: (pos: Axial) => Unit | undefined,
-    canAfford: (player: PlayerId, cost: number) => boolean,
-    spend: (player: PlayerId, cost: number) => boolean
+    getTile: GetTile,
+    getNeighbors: GetNeighbors,
+    getUnitAt: GetUnitAt,
+    canAfford: CanAfford,
+    spend: Spend
     ): CombatPreviewEntry[] {
     if (!this.shouldRun(state)) return [];
     const combatPreviews: CombatPreviewEntry[] = [];
@@ -59,12 +79,12 @@ export class AiSystem {
 
     const hasUnoccupiedCitiesOrIndustries = this.hasUnoccupiedCityOrIndustry(state);
     const hasUnactedCavalry = this.hasUnactedCavalry(state, state.currentPlayer);
-    const aiUnits = state.units.filter(
-      (unit) => unit.owner === state.currentPlayer && unit.type !== UnitType.MilitaryBase
-    );
+    const aiUnits = state.units.filter(function (unit) {
+      return unit.owner === state.currentPlayer && unit.type !== UnitType.MilitaryBase;
+    });
 
     if (hasUnoccupiedCitiesOrIndustries) {
-      aiUnits.sort((left, right) => {
+      aiUnits.sort(function (left, right) {
         let leftPriority = 1;
         if (left.type === UnitType.Cavalry) {
           leftPriority = 0;
@@ -111,21 +131,21 @@ export class AiSystem {
 
   private purchaseUnits(
     state: GameState,
-    getNeighbors: (q: number, r: number) => HexTile[],
-    getUnitAt: (pos: Axial) => Unit | undefined,
-    canAfford: (player: PlayerId, cost: number) => boolean,
-    spend: (player: PlayerId, cost: number) => boolean
+    getNeighbors: GetNeighbors,
+    getUnitAt: GetUnitAt,
+    canAfford: CanAfford,
+    spend: Spend
   ): void {
     const aiPlayer = state.currentPlayer;
     if (this.aiPlayer === null || aiPlayer !== this.aiPlayer) return;
     const hasUnoccupiedCitiesOrIndustries = this.hasUnoccupiedCityOrIndustry(state);
 
-    const hasMedic = state.units.some(
-      (unit) => unit.owner === aiPlayer && unit.type === UnitType.Medic
-    );
-    const hasEngineer = state.units.some(
-      (unit) => unit.owner === aiPlayer && unit.type === UnitType.Engineer
-    );
+    const hasMedic = state.units.some(function (unit) {
+      return unit.owner === aiPlayer && unit.type === UnitType.Medic;
+    });
+    const hasEngineer = state.units.some(function (unit) {
+      return unit.owner === aiPlayer && unit.type === UnitType.Engineer;
+    });
 
      let purchasePriority: UnitType[] = [
       UnitType.Tank,
@@ -152,9 +172,9 @@ export class AiSystem {
       purchasePriority.unshift(UnitType.Engineer);
     }
 
-    const headquarters = state.units.filter(
-      (unit) => unit.owner === aiPlayer && unit.type === UnitType.MilitaryBase
-    );
+    const headquarters = state.units.filter(function (unit) {
+      return unit.owner === aiPlayer && unit.type === UnitType.MilitaryBase;
+    });
 
     for (const hq of headquarters) {
         for (const unitType of purchasePriority) {
@@ -179,8 +199,8 @@ export class AiSystem {
   private findSpawnTileNear(
     q: number,
     r: number,
-    getNeighbors: (q: number, r: number) => HexTile[],
-    getUnitAt: (pos: Axial) => Unit | undefined,
+    getNeighbors: GetNeighbors,
+    getUnitAt: GetUnitAt,
     avoidCityIndustry: boolean
   ): Axial | null {
     const neighbors = getNeighbors(q, r);
@@ -248,7 +268,7 @@ export class AiSystem {
   private tryAttack(
     state: GameState,
     attacker: Unit,
-    getTile: (pos: Axial) => HexTile | undefined
+    getTile: GetTile
     ): CombatPreviewEntry | null {
     if (attacker.type === UnitType.Engineer) return null;
     if (attacker.acted) return null;
@@ -281,7 +301,7 @@ export class AiSystem {
   private tryMove(
     state: GameState,
     unit: Unit,
-    getNeighbors: (q: number, r: number) => HexTile[],
+    getNeighbors: GetNeighbors,
     hasUnoccupiedCitiesOrIndustries: boolean,
     hasUnactedCavalry: boolean
   ): boolean {
@@ -300,7 +320,9 @@ export class AiSystem {
     const reachableTiles = this.movementSystem.computeReachableTiles(
       state,
       unit,
-      (q, r) => getNeighbors(q, r)
+      function (q, r) {
+        return getNeighbors(q, r);
+      }
     );
 
     let bestMove: Axial | null = null;
@@ -324,7 +346,9 @@ export class AiSystem {
       state,
       unit,
       bestMove,
-      (q, r) => getNeighbors(q, r)
+      function (q, r) {
+        return getNeighbors(q, r);
+      }
     );
 
     if (!path) return false;
@@ -342,7 +366,7 @@ export class AiSystem {
   private tryMoveEngineer(
     state: GameState,
     engineer: Unit,
-    getNeighbors: (q: number, r: number) => HexTile[]
+    getNeighbors: GetNeighbors
   ): boolean {
     if (engineer.acted || engineer.remainingMovement <= 0) return false;
 
@@ -352,7 +376,9 @@ export class AiSystem {
     const reachableTiles = this.movementSystem.computeReachableTiles(
       state,
       engineer,
-      (q, r) => getNeighbors(q, r)
+      function (q, r) {
+        return getNeighbors(q, r);
+      }
     );
 
     let bestMove: Axial | null = null;
@@ -378,7 +404,9 @@ export class AiSystem {
       state,
       engineer,
       bestMove,
-      (q, r) => getNeighbors(q, r)
+      function (q, r) {
+        return getNeighbors(q, r);
+      }
     );
 
     if (!path) return false;
@@ -401,7 +429,7 @@ export class AiSystem {
   private tryRetreat(
     state: GameState,
     unit: Unit,
-    getNeighbors: (q: number, r: number) => HexTile[]
+    getNeighbors: GetNeighbors
   ): boolean {
     if (unit.acted || unit.remainingMovement <= 0) return false;
 
@@ -411,7 +439,9 @@ export class AiSystem {
     const reachableTiles = this.movementSystem.computeReachableTiles(
       state,
       unit,
-      (q, r) => getNeighbors(q, r)
+      function (q, r) {
+        return getNeighbors(q, r);
+      }
     );
 
     let bestMove: Axial | null = null;
@@ -435,7 +465,9 @@ export class AiSystem {
       state,
       unit,
       bestMove,
-      (q, r) => getNeighbors(q, r)
+      function (q, r) {
+        return getNeighbors(q, r);
+      }
     );
 
     if (!path) return false;
@@ -452,7 +484,7 @@ export class AiSystem {
   private tryMoveToInjured(
     state: GameState,
     medic: Unit,
-    getNeighbors: (q: number, r: number) => HexTile[]
+    getNeighbors: GetNeighbors
   ): boolean {
     if (medic.acted || medic.remainingMovement <= 0) return false;
 
@@ -462,7 +494,9 @@ export class AiSystem {
     const reachableTiles = this.movementSystem.computeReachableTiles(
       state,
       medic,
-      (q, r) => getNeighbors(q, r)
+      function (q, r) {
+        return getNeighbors(q, r);
+      }
     );
 
     let bestMove: Axial | null = null;
@@ -504,11 +538,15 @@ export class AiSystem {
   }
 
   private getTile(state: GameState, pos: Axial): HexTile | undefined {
-    return state.tiles.find((tile) => tile.q === pos.q && tile.r === pos.r);
+    return state.tiles.find(function (tile) {
+      return tile.q === pos.q && tile.r === pos.r;
+    });
   }
 
   private getUnitAt(state: GameState, pos: Axial): Unit | undefined {
-    return state.units.find((occupant) => occupant.q === pos.q && occupant.r === pos.r);
+    return state.units.find(function (occupant) {
+      return occupant.q === pos.q && occupant.r === pos.r;
+    });
   }
 
   private isCityOrIndustry(tile: HexTile): boolean {
@@ -516,12 +554,14 @@ export class AiSystem {
   }
 
   private countHoldings(state: GameState, owner: PlayerId): number {
-    return state.units.reduce((count, occupant) => {
-      if (occupant.owner !== owner) return count;
+    let count = 0;
+    for (const occupant of state.units) {
+      if (occupant.owner !== owner) continue;
       const tile = this.getTile(state, { q: occupant.q, r: occupant.r });
-      if (!tile || !this.isCityOrIndustry(tile)) return count;
-      return count + 1;
-    }, 0);
+      if (!tile || !this.isCityOrIndustry(tile)) continue;
+      count += 1;
+    }
+    return count;
   }
 
   private findClosestFreeTileInRange(state: GameState, unit: Unit, center: Axial): Axial | null {
@@ -584,8 +624,8 @@ export class AiSystem {
   private tryBuildRoadTowardsEnemyHq(
     state: GameState,
     engineer: Unit,
-    getTile: (pos: Axial) => HexTile | undefined,
-    spend: (player: PlayerId, cost: number) => boolean
+    getTile: GetTile,
+    spend: Spend
   ): boolean {
     if (engineer.acted) return false;
 
@@ -650,17 +690,19 @@ export class AiSystem {
     return true;
   }
 
-   private findTarget(state: GameState, unit: Unit, allowFreeTargets: boolean): Axial | null {
+  private findTarget(state: GameState, unit: Unit, allowFreeTargets: boolean): Axial | null {
     if (allowFreeTargets) {
       const freeTarget = this.findClosestUnoccupiedCityOrIndustry(state, unit);
       if (freeTarget) return freeTarget;
     }
 
     const aiHoldings = this.countHoldings(state, unit.owner);
-    const opponentHoldings = state.units.reduce((max, occupant) => {
-      if (occupant.owner === unit.owner) return max;
-      return Math.max(max, this.countHoldings(state, occupant.owner));
-    }, 0);
+    let opponentHoldings = 0;
+    for (const occupant of state.units) {
+      if (occupant.owner === unit.owner) continue;
+      const holdings = this.countHoldings(state, occupant.owner);
+      opponentHoldings = Math.max(opponentHoldings, holdings);
+    }
 
     // Prioritize attacking enemy military bases if we have more holdings
     if (aiHoldings > opponentHoldings) {
@@ -706,17 +748,18 @@ export class AiSystem {
     return bestTarget;
   }
 
-    private hasUnoccupiedCityOrIndustry(state: GameState): boolean {
-    return state.tiles.some((tile) => {
-      if (!this.isCityOrIndustry(tile)) return false;
-      return !this.getUnitAt(state, { q: tile.q, r: tile.r });
+  private hasUnoccupiedCityOrIndustry(state: GameState): boolean {
+    const system = this;
+    return state.tiles.some(function (tile) {
+      if (!system.isCityOrIndustry(tile)) return false;
+      return !system.getUnitAt(state, { q: tile.q, r: tile.r });
     });
   }
 
   private hasUnactedCavalry(state: GameState, owner: PlayerId): boolean {
-    return state.units.some(
-      (unit) => unit.owner === owner && unit.type === UnitType.Cavalry && !unit.acted
-    );
+    return state.units.some(function (unit) {
+      return unit.owner === owner && unit.type === UnitType.Cavalry && !unit.acted;
+    });
   }
 
   private findClosestUnoccupiedCityOrIndustry(state: GameState, unit: Unit): Axial | null {
@@ -737,9 +780,9 @@ export class AiSystem {
   }
 
   private findRetreatTarget(state: GameState, unit: Unit): Axial | null {
-    const medics = state.units.filter(
-      (ally) => ally.owner === unit.owner && ally.type === UnitType.Medic
-    );
+    const medics = state.units.filter(function (ally) {
+      return ally.owner === unit.owner && ally.type === UnitType.Medic;
+    });
 
     let bestTarget: Axial | null = null;
     let bestDistance = Number.POSITIVE_INFINITY;
