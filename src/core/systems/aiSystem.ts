@@ -65,8 +65,14 @@ export class AiSystem {
 
     if (hasUnoccupiedCitiesOrIndustries) {
       aiUnits.sort((left, right) => {
-        const leftPriority = left.type === UnitType.Cavalry ? 0 : 1;
-        const rightPriority = right.type === UnitType.Cavalry ? 0 : 1;
+        let leftPriority = 1;
+        if (left.type === UnitType.Cavalry) {
+          leftPriority = 0;
+        }
+        let rightPriority = 1;
+        if (right.type === UnitType.Cavalry) {
+          rightPriority = 0;
+        }
         if (leftPriority !== rightPriority) {
           return leftPriority - rightPriority;
         }
@@ -121,21 +127,22 @@ export class AiSystem {
       (unit) => unit.owner === aiPlayer && unit.type === UnitType.Engineer
     );
 
-     const purchasePriority: UnitType[] = hasUnoccupiedCitiesOrIndustries
-      ? [
-          UnitType.Cavalry,
-          UnitType.Tank,
-          UnitType.Artillery,
-          UnitType.MachnineGun,
-          UnitType.Infantry,
-        ]
-      : [
-          UnitType.Tank,
-          UnitType.Artillery,
-          UnitType.Cavalry,
-          UnitType.MachnineGun,
-          UnitType.Infantry,
-        ];
+     let purchasePriority: UnitType[] = [
+      UnitType.Tank,
+      UnitType.Artillery,
+      UnitType.Cavalry,
+      UnitType.MachnineGun,
+      UnitType.Infantry,
+    ];
+    if (hasUnoccupiedCitiesOrIndustries) {
+      purchasePriority = [
+        UnitType.Cavalry,
+        UnitType.Tank,
+        UnitType.Artillery,
+        UnitType.MachnineGun,
+        UnitType.Infantry,
+      ];
+    }
 
 
     if (!hasMedic) {
@@ -562,7 +569,11 @@ export class AiSystem {
   }
 
   private findEngineerTarget(state: GameState, engineer: Unit): Axial | null {
-    const enemyHq = this.findClosestHeadquarter(state, engineer.owner === 0 ? 1 : 0, {
+    let enemyOwner: PlayerId = 0;
+    if (engineer.owner === 0) {
+      enemyOwner = 1;
+    }
+    const enemyHq = this.findClosestHeadquarter(state, enemyOwner, {
       q: engineer.q,
       r: engineer.r,
     });
@@ -581,11 +592,16 @@ export class AiSystem {
     const ownHq = this.findClosestHeadquarter(state, engineer.owner, {
       q: engineer.q,
       r: engineer.r,
-    });
-    const enemyHq = this.findClosestHeadquarter(state, engineer.owner === 0 ? 1 : 0, {
+    });    
+    let enemyOwner: PlayerId = 0;
+    if (engineer.owner === 0) {
+      enemyOwner = 1;
+    }
+    const enemyHq = this.findClosestHeadquarter(state, enemyOwner, {
       q: engineer.q,
       r: engineer.r,
     });
+    
 
     if (!ownHq || !enemyHq) return false;
 
