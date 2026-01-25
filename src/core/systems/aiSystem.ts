@@ -69,7 +69,12 @@ export class AiSystem {
         this.tryMoveToInjured(state, unit, getNeighbors);
         continue;
       }
-
+      
+      if (unit.type === UnitType.Engineer) {
+        if (this.tryBuildRoadTowardsEnemyHq(state, unit, getTile, spend)) continue;
+        this.tryMoveEngineer(state, unit, getNeighbors);
+        continue;
+      }
 
       if (unit.hp < 15 && this.tryRetreat(state, unit, getNeighbors)) continue;
 
@@ -97,6 +102,9 @@ export class AiSystem {
     const hasMedic = state.units.some(
       (unit) => unit.owner === aiPlayer && unit.type === UnitType.Medic
     );
+    const hasEngineer = state.units.some(
+      (unit) => unit.owner === aiPlayer && unit.type === UnitType.Engineer
+    );
 
     const purchasePriority: UnitType[] = [
       UnitType.Tank,
@@ -109,16 +117,24 @@ export class AiSystem {
     if (!hasMedic) {
       purchasePriority.unshift(UnitType.Medic);
     }
+    if (!hasEngineer) {
+      purchasePriority.unshift(UnitType.Engineer);
+    }
 
     const headquarters = state.units.filter(
       (unit) => unit.owner === aiPlayer && unit.type === UnitType.MilitaryBase
     );
 
     for (const hq of headquarters) {
-      const spawnTile = this.findSpawnTileNear(hq.q, hq.r, getNeighbors, getUnitAt);
-      if (!spawnTile) continue;
-
-      for (const unitType of purchasePriority) {
+        for (const unitType of purchasePriority) {
+        const spawnTile = this.findSpawnTileNear(
+          hq.q,
+          hq.r,
+          getNeighbors,
+          getUnitAt,
+          unitType === UnitType.Engineer
+        );
+        if (!spawnTile) continue;  
         const cost = UNIT_TYPES[unitType].price;
         if (!canAfford(aiPlayer, cost)) continue;
         if (!spend(aiPlayer, cost)) continue;
@@ -133,11 +149,13 @@ export class AiSystem {
     q: number,
     r: number,
     getNeighbors: (q: number, r: number) => HexTile[],
-    getUnitAt: (pos: Axial) => Unit | undefined
+    getUnitAt: (pos: Axial) => Unit | undefined,
+    avoidCityIndustry: boolean
   ): Axial | null {
     const neighbors = getNeighbors(q, r);
     for (const tile of neighbors) {
       if (tile.field === FieldType.Ocean) continue;
+      if (avoidCityIndustry && this.isCityOrIndustry(tile)) continue;
       if (getUnitAt({ q: tile.q, r: tile.r })) continue;
       return { q: tile.q, r: tile.r };
     }
@@ -201,6 +219,7 @@ export class AiSystem {
     attacker: Unit,
     getTile: (pos: Axial) => HexTile | undefined
     ): CombatPreviewEntry | null {
+    if (attacker.type === UnitType.Engineer) return null;
     if (attacker.acted) return null;
 
     let bestTarget: Unit | null = null;
@@ -278,6 +297,65 @@ export class AiSystem {
     if (moved) {
       unit.acted = true;
       unit.animationPath = path;
+    }
+
+    return moved;
+  }
+
+  private tryMoveEngineer(
+    state: GameState,
+    engineer: Unit,
+    getNeighbors: (q: number, r: number) => HexTile[]
+  ): boolean {
+    if (engineer.acted || engineer.remainingMovement <= 0) return false;
+
+    const target = this.findEngineerTarget(state, engineer);
+    if (!target) return false;
+
+    const reachableTiles = this.movementSystem.computeReachableTiles(
+      state,
+      engineer,
+      (q, r) => getNeighbors(q, r)
+    );
+
+    let bestMove: Axial | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    for (const key of Object.keys(reachableTiles)) {
+      const [qStr, rStr] = key.split(",");
+      const q = Number(qStr);
+      const r = Number(rStr);
+      const tile = this.getTile(state, { q, r });
+      if (tile && this.isCityOrIndustry(tile)) continue;
+      const dist = axialDistance({ q, r }, target);
+
+      if (dist < bestDistance) {
+        bestDistance = dist;
+        bestMove = { q, r };
+      }
+    }
+
+    if (!bestMove) return false;
+
+    const path = this.movementSystem.computePathToTarget(
+      state,
+      engineer,
+      bestMove,
+      (q, r) => getNeighbors(q, r)
+    );
+
+    if (!path) return false;
+
+    const moved = this.movementSystem.tryMoveUsingReachable(
+      state,
+      engineer,
+      bestMove,
+      reachableTiles
+    );
+
+    if (moved) {
+      engineer.acted = true;
+      engineer.animationPath = path;
     }
 
     return moved;
@@ -436,6 +514,95 @@ export class AiSystem {
     return bestTile;
   }
 
+  private findClosestHeadquarter(state: GameState, owner: PlayerId, from: Axial): Unit | null {
+    let bestHq: Unit | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    for (const unit of state.units) {
+      if (unit.owner !== owner) continue;
+      if (unit.type !== UnitType.MilitaryBase) continue;
+      const distance = axialDistance(from, { q: unit.q, r: unit.r });
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestHq = unit;
+      }
+    }
+
+    return bestHq;
+  }
+
+  private findEngineerTarget(state: GameState, engineer: Unit): Axial | null {
+    const enemyHq = this.findClosestHeadquarter(state, engineer.owner === 0 ? 1 : 0, {
+      q: engineer.q,
+      r: engineer.r,
+    });
+    if (!enemyHq) return null;
+    return { q: enemyHq.q, r: enemyHq.r };
+  }
+
+  private tryBuildRoadTowardsEnemyHq(
+    state: GameState,
+    engineer: Unit,
+    getTile: (pos: Axial) => HexTile | undefined,
+    spend: (player: PlayerId, cost: number) => boolean
+  ): boolean {
+    if (engineer.acted) return false;
+
+    const ownHq = this.findClosestHeadquarter(state, engineer.owner, {
+      q: engineer.q,
+      r: engineer.r,
+    });
+    const enemyHq = this.findClosestHeadquarter(state, engineer.owner === 0 ? 1 : 0, {
+      q: engineer.q,
+      r: engineer.r,
+    });
+
+    if (!ownHq || !enemyHq) return false;
+
+    const overlay = this.combatSystem.computeEngineerRoadOverlay(state, engineer);
+    const pathDistance = axialDistance(
+      { q: ownHq.q, r: ownHq.r },
+      { q: enemyHq.q, r: enemyHq.r }
+    );
+
+    let bestTile: Axial | null = null;
+    let bestAlignment = Number.POSITIVE_INFINITY;
+    let bestEnemyDistance = Number.POSITIVE_INFINITY;
+
+    for (const key of Object.keys(overlay)) {
+      const [qStr, rStr] = key.split(",");
+      const q = Number(qStr);
+      const r = Number(rStr);
+      const tile = getTile({ q, r });
+      if (!tile) continue;
+      if (this.isCityOrIndustry(tile)) continue;
+
+      const distanceToEnemy = axialDistance({ q, r }, { q: enemyHq.q, r: enemyHq.r });
+      const distanceToOwn = axialDistance({ q, r }, { q: ownHq.q, r: ownHq.r });
+      const alignment = Math.abs(distanceToOwn + distanceToEnemy - pathDistance);
+
+      if (
+        alignment < bestAlignment ||
+        (alignment === bestAlignment && distanceToEnemy < bestEnemyDistance)
+      ) {
+        bestAlignment = alignment;
+        bestEnemyDistance = distanceToEnemy;
+        bestTile = { q, r };
+      }
+    }
+
+    if (!bestTile) return false;
+
+    const cost = 20;
+    if (!spend(engineer.owner, cost)) return false;
+
+    const targetTile = getTile(bestTile);
+    if (!targetTile) return false;
+
+    targetTile.hasRoad = true;
+    engineer.acted = true;
+    return true;
+  }
 
   private findTarget(state: GameState, unit: Unit): Axial | null {
     const aiHoldings = this.countHoldings(state, unit.owner);
