@@ -64,7 +64,12 @@ export class AiSystem {
     for (const unit of aiUnits) {
       if (unit.acted) continue;
 
-      if (unit.type === UnitType.Medic && this.tryHeal(state, unit)) continue;
+      if (unit.type === UnitType.Medic) {
+        if (this.tryHeal(state, unit)) continue;
+        this.tryMoveToInjured(state, unit, getNeighbors);
+        continue;
+      }
+
 
       if (unit.hp < 15 && this.tryRetreat(state, unit, getNeighbors)) continue;
 
@@ -166,6 +171,29 @@ export class AiSystem {
     healer.experience = Math.min(10, healer.experience + 1);
     healer.acted = true;
     return true;
+  }
+
+  private findInjuredAlly(state: GameState, medic: Unit): Axial | null {
+    let bestTarget: Axial | null = null;
+    let lowestHpRatio = 1;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    for (const unit of state.units) {
+      if (unit.owner !== medic.owner) continue;
+      if (unit === medic) continue;
+      if (unit.hp >= unit.maxHP) continue;
+
+      const ratio = unit.hp / unit.maxHP;
+      const distance = axialDistance({ q: medic.q, r: medic.r }, { q: unit.q, r: unit.r });
+
+      if (ratio < lowestHpRatio || (ratio === lowestHpRatio && distance < bestDistance)) {
+        lowestHpRatio = ratio;
+        bestDistance = distance;
+        bestTarget = { q: unit.q, r: unit.r };
+      }
+    }
+
+    return bestTarget;
   }
 
   private tryAttack(
@@ -303,6 +331,60 @@ export class AiSystem {
       unit.acted = true;
       unit.animationPath = path;
     }
+    return moved;
+  }
+
+  private tryMoveToInjured(
+    state: GameState,
+    medic: Unit,
+    getNeighbors: (q: number, r: number) => HexTile[]
+  ): boolean {
+    if (medic.acted || medic.remainingMovement <= 0) return false;
+
+    const target = this.findInjuredAlly(state, medic);
+    if (!target) return false;
+
+    const reachableTiles = this.movementSystem.computeReachableTiles(
+      state,
+      medic,
+      (q, r) => getNeighbors(q, r)
+    );
+
+    let bestMove: Axial | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    for (const key of Object.keys(reachableTiles)) {
+      const [qStr, rStr] = key.split(",");
+      const q = Number(qStr);
+      const r = Number(rStr);
+      const tile = this.getTile(state, { q, r });
+      if (tile && this.isCityOrIndustry(tile)) continue;
+      const dist = axialDistance({ q, r }, target);
+
+      if (dist < bestDistance) {
+        bestDistance = dist;
+        bestMove = { q, r };
+      }
+    }
+
+    if (!bestMove) return false;
+
+    const path = this.movementSystem.computePathToTarget(
+      state,
+      medic,
+      bestMove,
+      (q, r) => getNeighbors(q, r)
+    );
+
+    if (!path) return false;
+
+    const moved = this.movementSystem.tryMoveUsingReachable(state, medic, bestMove, reachableTiles);
+
+    if (moved) {
+      medic.acted = true;
+      medic.animationPath = path;
+    }
+
     return moved;
   }
 
