@@ -602,7 +602,10 @@ export class GameCore {
       return false;
     }
 
-    this.state.units.push(new Unit(unitType, pos.q, pos.r, owner));
+    const purchasedUnit = new Unit(unitType, pos.q, pos.r, owner);
+    purchasedUnit.remainingMovement = 0;
+    purchasedUnit.acted = true;
+    this.state.units.push(purchasedUnit);
     this.pendingPurchase = null;
     this.state.reachableTiles = {};
     this.state.selectedHex = { q: pos.q, r: pos.r };
