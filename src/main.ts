@@ -9,6 +9,7 @@ import { showHeadquarterDialog } from "./ui/headquarterDialog";
 import { showStartDialog } from "./ui/startDialog";
 import { showSettingsDialog } from "./ui/settingsDialog";
 import { showWinDialog } from "./ui/winDialog";
+import { showAboutDialog } from "./ui/aboutDialog";
 import { PLAYER_NAMES } from "./core/types";
 import type { SettingsState } from "./ui/settingsDialog";
 import { aiDifficultyMultipliers } from "./core/systems/aiSystem";
@@ -807,6 +808,21 @@ function openStartDialog(): void {
     },
     onOpenSettings: () => {
       openSettingsDialog();
+    },
+        onOpenAbout: () => {
+      openAboutDialog();
+    },
+  });
+}
+
+function openAboutDialog(): void {
+  if (!appRoot) {
+    return;
+  }
+
+  showAboutDialog(appRoot, {
+    onClose: () => {
+      openStartDialog();
     },
   });
 }

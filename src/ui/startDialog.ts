@@ -4,6 +4,7 @@ type StartDialogOptions = {
   onSave: () => void;
   onLoad: () => void;
   onOpenSettings: () => void;
+  onOpenAbout: () => void;
   resumeEnabled?: boolean;
 };
 
@@ -54,6 +55,15 @@ export function showStartDialog(appRoot: HTMLElement, options: StartDialogOption
     options.onOpenSettings();
   });
 
+  const aboutButton = document.createElement("button");
+  aboutButton.className = "start-dialog-button";
+  aboutButton.type = "button";
+  aboutButton.textContent = "About";
+
+  aboutButton.addEventListener("click", () => {
+    overlay.remove();
+    options.onOpenAbout();
+  });
 
   const saveButton = document.createElement("button");
   saveButton.className = "start-dialog-button";
@@ -74,7 +84,7 @@ export function showStartDialog(appRoot: HTMLElement, options: StartDialogOption
     options.onLoad();
   });
 
-  dialog.append(title, resumeButton, startButton, settingsButton, saveButton, loadButton);
+  dialog.append(title, resumeButton, startButton, settingsButton, aboutButton, saveButton, loadButton);
   overlay.appendChild(dialog);
   appRoot.appendChild(overlay);
 }

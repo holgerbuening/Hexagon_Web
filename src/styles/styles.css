@@ -619,3 +619,80 @@ canvas:active {
 .hq-preview-stats {
   width: 100%;
 }
+
+/* ===== About dialog ===== */
+.about-dialog {
+  width: 860px;
+  max-width: 94%;
+  max-height: 92vh;
+}
+
+.about-dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 82vh;
+  overflow-y: auto;
+}
+
+.about-title {
+  margin: 0;
+  text-align: center;
+  font-size: 34px;
+}
+
+.about-subtitle {
+  margin: 0;
+  text-align: center;
+  font-size: 17px;
+  opacity: 0.92;
+}
+
+.about-meta {
+  margin: 0;
+  text-align: center;
+  font-weight: 600;
+}
+
+.about-section {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.about-section-title {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.about-text {
+  margin: 0 0 6px;
+  line-height: 1.45;
+}
+
+.about-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.about-list-item {
+  margin-bottom: 4px;
+  line-height: 1.35;
+}
+
+.about-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.about-link-label {
+  font-weight: 600;
+}
+
+.about-link {
+  color: #d4f4ff;
+  text-decoration: underline;
+}
