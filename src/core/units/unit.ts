@@ -20,6 +20,9 @@ export class Unit {
   selected: boolean = false;
   animationPath: Axial[] = [];
 
+  // Planned road route for the AI engineer, independent of movement animations.
+  roadBuildPath: Axial[] = [];
+
   constructor(type: UnitType, q: number, r: number, owner: PlayerId) {
     this.type = type;
     this.q = q;
@@ -64,6 +67,7 @@ export class Unit {
       remainingMovement: unit.remainingMovement,
       acted: unit.acted,
       selected: unit.selected,
+      roadBuildPath: unit.roadBuildPath.map((pos) => ({ q: pos.q, r: pos.r })),
     };
   }
 
@@ -78,6 +82,7 @@ export class Unit {
     unit.remainingMovement = data.remainingMovement;
     unit.acted = data.acted;
     unit.selected = data.selected;
+    unit.roadBuildPath = (data.roadBuildPath ?? []).map((pos) => ({ q: pos.q, r: pos.r }));
     unit.pos = { q: data.q, r: data.r };
     return unit;
   }

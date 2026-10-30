@@ -35,6 +35,7 @@ export const aiDifficultyMultipliers: Record<AiDifficulty, number> = {
 };
 
 export class AiSystem {
+  private static readonly ENGINEER_ROAD_COST = 20;
   private movementSystem: MovementSystem;
   private combatSystem: CombatSystem;
   private aiPlayer: PlayerId | null = 1;
@@ -102,6 +103,10 @@ export class AiSystem {
 
 
     for (const unit of aiUnits) {
+      // Older saves may contain engineers without a road plan.
+      if (unit.type === UnitType.Engineer && unit.roadBuildPath.length === 0) {
+        unit.roadBuildPath = this.planEngineerRoadPath(state, unit, getNeighbors);
+      }
       if (unit.acted) continue;
 
       if (unit.type === UnitType.Medic) {
@@ -111,8 +116,13 @@ export class AiSystem {
       }
       
       if (unit.type === UnitType.Engineer) {
-        if (this.tryBuildRoadTowardsEnemyHq(state, unit, getTile, spend)) continue;
-        this.tryMoveEngineer(state, unit, getNeighbors);
+        const target = this.findEngineerTarget(state, unit);
+        if (!target || !canAfford(unit.owner, AiSystem.ENGINEER_ROAD_COST)) continue;
+        if (this.tryBuildEngineerRoad(state, unit, target, spend)) continue;
+        if (this.tryMoveEngineer(state, unit, target, getNeighbors)) {
+          this.tryBuildEngineerRoad(state, unit, target, spend);
+          unit.acted = true;
+        }
         continue;
       }
 
@@ -190,7 +200,11 @@ export class AiSystem {
         if (!canAfford(aiPlayer, cost)) continue;
         if (!spend(aiPlayer, cost)) continue;
 
-        state.units.push(new Unit(unitType, spawnTile.q, spawnTile.r, aiPlayer));
+        const unit = new Unit(unitType, spawnTile.q, spawnTile.r, aiPlayer);
+        if (unit.type === UnitType.Engineer) {
+          unit.roadBuildPath = this.planEngineerRoadPath(state, unit, getNeighbors);
+        }
+        state.units.push(unit);
         break;
       }
     }
@@ -366,50 +380,46 @@ export class AiSystem {
   private tryMoveEngineer(
     state: GameState,
     engineer: Unit,
+    target: HexTile,
     getNeighbors: GetNeighbors
   ): boolean {
     if (engineer.acted || engineer.remainingMovement <= 0) return false;
 
-    const target = this.findEngineerTarget(state, engineer);
-    if (!target) return false;
+    // Find a real route to a free building position, including detours around units.
+    let bestPath: Axial[] | null = null;
+    for (const tile of getNeighbors(target.q, target.r)) {
+      if (tile.field === FieldType.Ocean || this.isCityOrIndustry(tile)) continue;
+      const occupant = this.getUnitAt(state, tile);
+      if (occupant && occupant !== engineer) continue;
+
+      const path = this.movementSystem.computePathToTarget(
+        state,
+        engineer,
+        tile,
+        getNeighbors,
+        { maxCost: Number.POSITIVE_INFINITY }
+      );
+      if (path && (bestPath === null || path.length < bestPath.length)) {
+        bestPath = path;
+      }
+    }
+
+    if (!bestPath || bestPath.length === 0) return false;
 
     const reachableTiles = this.movementSystem.computeReachableTiles(
       state,
       engineer,
-      function (q, r) {
-        return getNeighbors(q, r);
-      }
+      getNeighbors
     );
 
-    let bestMove: Axial | null = null;
-    let bestDistance = Number.POSITIVE_INFINITY;
-
-    for (const key of Object.keys(reachableTiles)) {
-      const [qStr, rStr] = key.split(",");
-      const q = Number(qStr);
-      const r = Number(rStr);
-      const tile = this.getTile(state, { q, r });
-      if (tile && this.isCityOrIndustry(tile)) continue;
-      const dist = axialDistance({ q, r }, target);
-
-      if (dist < bestDistance) {
-        bestDistance = dist;
-        bestMove = { q, r };
-      }
+    // Follow only the part of the approach route reachable in this turn.
+    const movementPath: Axial[] = [];
+    for (const step of bestPath) {
+      if (reachableTiles[MovementSystem.key(step.q, step.r)] === undefined) break;
+      movementPath.push(step);
     }
-
+    const bestMove = movementPath[movementPath.length - 1];
     if (!bestMove) return false;
-
-    const path = this.movementSystem.computePathToTarget(
-      state,
-      engineer,
-      bestMove,
-      function (q, r) {
-        return getNeighbors(q, r);
-      }
-    );
-
-    if (!path) return false;
 
     const moved = this.movementSystem.tryMoveUsingReachable(
       state,
@@ -419,8 +429,8 @@ export class AiSystem {
     );
 
     if (moved) {
-      engineer.acted = true;
-      engineer.animationPath = path;
+      // Leave the action available for building after movement.
+      engineer.animationPath = movementPath;
     }
 
     return moved;
@@ -608,84 +618,60 @@ export class AiSystem {
     return bestHq;
   }
 
-  private findEngineerTarget(state: GameState, engineer: Unit): Axial | null {
-    let enemyOwner: PlayerId = 0;
-    if (engineer.owner === 0) {
-      enemyOwner = 1;
-    }
-    const enemyHq = this.findClosestHeadquarter(state, enemyOwner, {
-      q: engineer.q,
-      r: engineer.r,
-    });
-    if (!enemyHq) return null;
-    return { q: enemyHq.q, r: enemyHq.r };
-  }
-
-  private tryBuildRoadTowardsEnemyHq(
+  private planEngineerRoadPath(
     state: GameState,
     engineer: Unit,
-    getTile: GetTile,
+    getNeighbors: GetNeighbors
+  ): Axial[] {
+    const ownHq = this.findClosestHeadquarter(state, engineer.owner, engineer);
+    const enemyOwner: PlayerId = engineer.owner === 0 ? 1 : 0;
+    const enemyHq = this.findClosestHeadquarter(state, enemyOwner, engineer);
+    if (!ownHq || !enemyHq) return [];
+
+    // Plan across the whole map, ignoring units and per-turn movement limits.
+    const path = this.movementSystem.computePathToTarget(
+      state,
+      engineer,
+      { q: enemyHq.q, r: enemyHq.r },
+      getNeighbors,
+      {
+        start: { q: ownHq.q, r: ownHq.r },
+        maxCost: Number.POSITIVE_INFINITY,
+        ignoreUnits: true,
+      }
+    );
+
+    // The search excludes the start; remove the enemy HQ tile as well.
+    return path ? path.slice(0, -1) : [];
+  }
+
+  private findEngineerTarget(state: GameState, engineer: Unit): HexTile | null {
+    // Keep skipped gaps in the plan so they can be completed in a later turn.
+    for (const pos of engineer.roadBuildPath) {
+      const tile = this.getTile(state, pos);
+      if (!tile || tile.field === FieldType.Ocean || tile.hasRoad) continue;
+      if (this.isCityOrIndustry(tile)) continue;
+
+      const occupant = this.getUnitAt(state, pos);
+      if (occupant && occupant !== engineer) continue;
+      return tile;
+    }
+    return null;
+  }
+
+  private tryBuildEngineerRoad(
+    state: GameState,
+    engineer: Unit,
+    target: HexTile,
     spend: Spend
   ): boolean {
     if (engineer.acted) return false;
 
-    const ownHq = this.findClosestHeadquarter(state, engineer.owner, {
-      q: engineer.q,
-      r: engineer.r,
-    });    
-    let enemyOwner: PlayerId = 0;
-    if (engineer.owner === 0) {
-      enemyOwner = 1;
-    }
-    const enemyHq = this.findClosestHeadquarter(state, enemyOwner, {
-      q: engineer.q,
-      r: engineer.r,
-    });
-    
-
-    if (!ownHq || !enemyHq) return false;
-
     const overlay = this.combatSystem.computeEngineerRoadOverlay(state, engineer);
-    const pathDistance = axialDistance(
-      { q: ownHq.q, r: ownHq.r },
-      { q: enemyHq.q, r: enemyHq.r }
-    );
+    if (!overlay[MovementSystem.key(target.q, target.r)]) return false;
+    if (!spend(engineer.owner, AiSystem.ENGINEER_ROAD_COST)) return false;
 
-    let bestTile: Axial | null = null;
-    let bestAlignment = Number.POSITIVE_INFINITY;
-    let bestEnemyDistance = Number.POSITIVE_INFINITY;
-
-    for (const key of Object.keys(overlay)) {
-      const [qStr, rStr] = key.split(",");
-      const q = Number(qStr);
-      const r = Number(rStr);
-      const tile = getTile({ q, r });
-      if (!tile) continue;
-      if (this.isCityOrIndustry(tile)) continue;
-
-      const distanceToEnemy = axialDistance({ q, r }, { q: enemyHq.q, r: enemyHq.r });
-      const distanceToOwn = axialDistance({ q, r }, { q: ownHq.q, r: ownHq.r });
-      const alignment = Math.abs(distanceToOwn + distanceToEnemy - pathDistance);
-
-      if (
-        alignment < bestAlignment ||
-        (alignment === bestAlignment && distanceToEnemy < bestEnemyDistance)
-      ) {
-        bestAlignment = alignment;
-        bestEnemyDistance = distanceToEnemy;
-        bestTile = { q, r };
-      }
-    }
-
-    if (!bestTile) return false;
-
-    const cost = 20;
-    if (!spend(engineer.owner, cost)) return false;
-
-    const targetTile = getTile(bestTile);
-    if (!targetTile) return false;
-
-    targetTile.hasRoad = true;
+    target.hasRoad = true;
     engineer.acted = true;
     return true;
   }

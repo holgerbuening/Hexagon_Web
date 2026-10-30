@@ -2,6 +2,12 @@ import type { Axial, GameState, HexTile } from "../types";
 import { FieldType } from "../map/fieldTypes";
 import type { Unit } from "../units/unit";
 
+export interface PathfindingOptions {
+  start?: Axial;
+  maxCost?: number;
+  ignoreUnits?: boolean;
+}
+
 export class MovementSystem {
   public static key(q: number, r: number): string {
     // English comment: Stable key for maps/sets
@@ -144,14 +150,20 @@ export class MovementSystem {
     return true;
   }
 
+  /**
+   * Defaults to movement within this turn. Options also allow long-term planning.
+   * Use an infinite maxCost to search without a per-turn limit.
+   */
   public computePathToTarget(
     state: GameState,
     unit: Unit,
     target: Axial,
-    getNeighbors: (q: number, r: number) => HexTile[]
+    getNeighbors: (q: number, r: number) => HexTile[],
+    options: PathfindingOptions = {}
   ): Axial[] | null {
-    const startQ = unit.q;
-    const startR = unit.r;
+    const startQ = options.start?.q ?? unit.q;
+    const startR = options.start?.r ?? unit.r;
+    const maxCost = options.maxCost ?? unit.remainingMovement;
 
     if (startQ === target.q && startR === target.r) {
       return [];
@@ -198,12 +210,12 @@ export class MovementSystem {
         if (!this.isPassableForUnit(unit, n)) continue;
 
         const isStart = n.q === startQ && n.r === startR;
-        if (!isStart && this.isOccupied(state, n.q, n.r)) continue;
+        if (!options.ignoreUnits && !isStart && this.isOccupied(state, n.q, n.r)) continue;
 
         const stepCost = this.getMovementCost(n);
         const nextCost = current.cost + stepCost;
 
-        if (nextCost > unit.remainingMovement) continue;
+        if (nextCost > maxCost) continue;
 
         const nk = MovementSystem.key(n.q, n.r);
         const old = dist.get(nk);

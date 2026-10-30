@@ -53,6 +53,8 @@ export interface SavedUnit {
   remainingMovement: number;
   acted: boolean;
   selected: boolean;
+  // Optional for compatibility with saves created before road planning.
+  roadBuildPath?: Axial[];
 }
 
 export interface SavedGameState {
