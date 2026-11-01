@@ -17,7 +17,7 @@ import { MovementSystem } from "./systems/movementSystem";
 import { AnimationSystem } from "./systems/animationSystem";
 import { MapGenerator } from "./map/mapGenerator";
 import { deserializeState, serializeState } from "./stateSerializer";
-import { AiSystem } from "./systems/aiSystem";
+import { AiSystem, aiProfiles, type AiProfile } from "./systems/aiSystem";
 import type { Rng } from "./rng";
 
 // Main game logic container (no rendering here)
@@ -31,12 +31,13 @@ export class GameCore {
   private aiSystem: AiSystem;
   private pendingPurchase: { unitType: UnitType; owner: PlayerId } | null = null;
   private readonly rng: Rng;
+  private readonly incomeMultiplierOverrides = new Map<PlayerId, number>();
   
   constructor(width: number, height: number, rng: Rng = Math.random) {
     this.rng = rng;
     this.combatSystem = new CombatSystem(rng);
     this.mapGenerator = new MapGenerator(rng);
-    this.aiSystem = new AiSystem(this.movementSystem, this.combatSystem);
+    this.aiSystem = new AiSystem(this.movementSystem, this.combatSystem, rng);
     this.tileGrid = [];
     
     this.state = {
@@ -619,8 +620,8 @@ export class GameCore {
     return true;
   }
 
-  public configureAi(player: PlayerId | null, difficultyMultiplier = 1): void {
-    this.aiSystem.configure(player, difficultyMultiplier);
+  public configureAi(player: PlayerId | null, profile: AiProfile = aiProfiles.normal): void {
+    this.aiSystem.configure(player, profile);
   }
 
   private applyTurnIncome(player: PlayerId): void {
@@ -640,8 +641,17 @@ export class GameCore {
     }
   }
 
+  // Lets simulations with an AI on both sides give each of them its income bonus.
+  public setIncomeMultiplier(player: PlayerId, multiplier: number | null): void {
+    if (multiplier === null) {
+      this.incomeMultiplierOverrides.delete(player);
+    } else {
+      this.incomeMultiplierOverrides.set(player, multiplier);
+    }
+  }
+
   private getIncomeMultiplier(player: PlayerId): number {
-    return this.aiSystem.getIncomeMultiplier(player);
+    return this.incomeMultiplierOverrides.get(player) ?? this.aiSystem.getIncomeMultiplier(player);
   }
 
   private setStartUnits(): void {

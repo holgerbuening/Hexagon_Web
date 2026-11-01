@@ -12,7 +12,7 @@ import { showWinDialog } from "./ui/winDialog";
 import { showAboutDialog } from "./ui/aboutDialog";
 import { PLAYER_NAMES } from "./core/types";
 import type { SettingsState } from "./ui/settingsDialog";
-import { aiDifficultyMultipliers } from "./core/systems/aiSystem";
+import { aiProfiles } from "./core/systems/aiSystem";
 
 const BASE_HEX_SIZE = 64;
 const canvas = document.getElementById("game") as HTMLCanvasElement;
@@ -801,7 +801,7 @@ function openStartDialog(): void {
       });
     },
     onStartNew: () => {
-      game.configureAi(1, aiDifficultyMultipliers[settingsState.aiDifficulty]);
+      game.configureAi(1, aiProfiles[settingsState.aiDifficulty]);
       game.startNewGame();
       applyFullscreenPreference();
       renderAll();
@@ -836,7 +836,7 @@ function openSettingsDialog(): void {
     initialState: settingsState,
     onApply: (nextState) => {
       settingsState = nextState;
-      game.configureAi(1, aiDifficultyMultipliers[settingsState.aiDifficulty]);
+      game.configureAi(1, aiProfiles[settingsState.aiDifficulty]);
       game.configureAnimations(settingsState.animationSpeed, settingsState.animationsEnabled);
       movementAudio.setEnabled(settingsState.soundEffectsEnabled);
       movementAudio.setVolume(settingsState.soundEffectsVolume);
@@ -894,7 +894,7 @@ function loadGameFromFile(onSelected?: () => void): void {
       try {
         const parsed = JSON.parse(reader.result);
         game.loadState(parsed);
-        game.configureAi(1, aiDifficultyMultipliers[settingsState.aiDifficulty]);
+        game.configureAi(1, aiProfiles[settingsState.aiDifficulty]);
         renderAll();
       } catch (error) {
         console.error("Failed to load save game.", error);

@@ -109,12 +109,22 @@ The AI is state-based and assigns roles dynamically:
 
 The goal is not perfect play, but **believable and readable tactical behavior**.
 
+### Difficulty levels
+
+The levels differ in how the AI plays (see `aiProfiles` in `src/core/systems/aiSystem.ts`):
+
+- **Easy** – sometimes picks a random attack instead of the best one, often does not advance, ignores danger, does not focus fire, buys from a fixed list and retreats late.
+- **Normal** – full tactics: move-and-attack, target scoring, threat-aware positioning, focus fire and counter-buying.
+- **Hard** – like Normal, plus defending the own headquarter and a 1.5× income bonus.
+
+In simulations Normal wins about 79 % of games against Easy and Hard about 59 % against Normal.
+
 ### Testing and balancing the AI
 
 Random numbers in map generation, start units and combat come from an injectable generator (`src/core/rng.ts`), so games can be reproduced with a seed.
 
 - `npm test` runs the unit tests in `tests/`.
-- `npm run simulate -- --games 100 --seed 1` lets two AIs play against each other headlessly and prints win rates, average game length and AI time. Use `--a` and `--b` to give the two sides different income multipliers, `--basic-a` / `--basic-b` to let a side buy units with the basic fixed list instead of the smart purchasing, and `npm run simulate -- --help` for all options.
+- `npm run simulate -- --games 100 --seed 1` lets two AIs play against each other headlessly and prints win rates, average game length and AI time. Use `--a` and `--b` to pick the difficulty of each side (`easy`, `normal`, `hard`), `--a-income` / `--a-set threatWeight=1.5` (and the same for `--b`) to override single profile settings, and `npm run simulate -- --help` for all options.
 - `npm run typecheck:tools` type-checks the tests and the simulation tool.
 
 ---

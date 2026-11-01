@@ -1,4 +1,5 @@
 import { runBatch } from "./simulation";
+import { aiProfiles, type AiDifficulty, type AiProfile } from "../src/core/systems/aiSystem";
 
 const USAGE = `Headless AI-vs-AI simulation.
 
@@ -9,10 +10,12 @@ Usage: npm run simulate -- [options]
   --width <n>       map width (default 20)
   --height <n>      map height (default 20)
   --max-turns <n>   turn limit per game, counted per player move (default 300)
-  --a <x>           income multiplier of side A (default 1)
-  --b <x>           income multiplier of side B (default 1)
-  --basic-a         side A buys with the basic fixed list instead of smart purchasing
-  --basic-b         side B buys with the basic fixed list instead of smart purchasing
+  --a <level>       difficulty of side A: easy, normal or hard (default normal)
+  --b <level>       difficulty of side B: easy, normal or hard (default normal)
+  --a-income <x>    override the income multiplier of side A
+  --b-income <x>    override the income multiplier of side B
+  --a-set <k=v,..>  override profile settings of side A, e.g. threatWeight=1.5,defendHeadquarter=false
+  --b-set <k=v,..>  override profile settings of side B
   --verbose         print every game
   --help            show this text
 
@@ -24,7 +27,7 @@ function readOptions(argv: string[]): Map<string, string> {
     const arg = argv[i]!;
     if (!arg.startsWith("--")) throw new Error(`Unexpected argument: ${arg}`);
     const name = arg.slice(2);
-    if (name === "verbose" || name === "help" || name === "basic-a" || name === "basic-b") {
+    if (name === "verbose" || name === "help") {
       options.set(name, "true");
       continue;
     }
@@ -44,6 +47,27 @@ function numberOption(options: Map<string, string>, name: string, fallback: numb
   return value;
 }
 
+function profileOption(options: Map<string, string>, side: "a" | "b"): { label: string; profile: AiProfile } {
+  const level = options.get(side) ?? "normal";
+  if (!(level in aiProfiles)) throw new Error(`--${side} must be easy, normal or hard`);
+  const base = aiProfiles[level as AiDifficulty];
+  const profile: AiProfile = { ...base };
+  profile.incomeMultiplier = numberOption(options, `${side}-income`, base.incomeMultiplier);
+
+  const changes: string[] = [];
+  const overrides = options.get(`${side}-set`);
+  for (const entry of overrides ? overrides.split(",") : []) {
+    const [key, raw] = entry.split("=");
+    if (!key || raw === undefined || !(key in profile)) throw new Error(`--${side}-set: unknown setting "${entry}"`);
+    const target = profile as unknown as Record<string, number | boolean>;
+    target[key] = typeof base[key as keyof AiProfile] === "boolean" ? raw === "true" : Number(raw);
+    changes.push(entry);
+  }
+
+  const label = `${level} x${profile.incomeMultiplier}${changes.length > 0 ? ` (${changes.join(", ")})` : ""}`;
+  return { label, profile };
+}
+
 function main(): void {
   const options = readOptions(process.argv.slice(2));
   if (options.has("help")) {
@@ -53,16 +77,16 @@ function main(): void {
 
   const games = numberOption(options, "games", 50);
   if (games < 1) throw new Error("--games must be at least 1");
+  const sideA = profileOption(options, "a");
+  const sideB = profileOption(options, "b");
   const config = {
     games,
     seed: numberOption(options, "seed", 1),
     width: numberOption(options, "width", 20),
     height: numberOption(options, "height", 20),
     maxTurns: numberOption(options, "max-turns", 300),
-    multiplierA: numberOption(options, "a", 1),
-    multiplierB: numberOption(options, "b", 1),
-    smartPurchaseA: !options.has("basic-a"),
-    smartPurchaseB: !options.has("basic-b"),
+    profileA: sideA.profile,
+    profileB: sideB.profile,
   };
 
   const verbose = options.has("verbose");
@@ -74,7 +98,7 @@ function main(): void {
 
   const percent = (count: number) => ((count / result.games) * 100).toFixed(1);
   console.log(
-    `Games: ${result.games} (seed ${config.seed}, ${config.width}x${config.height}, income A x${config.multiplierA} / B x${config.multiplierB}, purchasing A ${config.smartPurchaseA ? "smart" : "basic"} / B ${config.smartPurchaseB ? "smart" : "basic"})`
+    `Games: ${result.games} (seed ${config.seed}, ${config.width}x${config.height}, A ${sideA.label} / B ${sideB.label})`
   );
   console.log(`A wins: ${result.winsA} (${percent(result.winsA)}%)`);
   console.log(`B wins: ${result.winsB} (${percent(result.winsB)}%)`);

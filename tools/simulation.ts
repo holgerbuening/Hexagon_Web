@@ -1,5 +1,5 @@
 import { GameCore } from "../src/core/gameCore";
-import { AiSystem } from "../src/core/systems/aiSystem";
+import { AiSystem, type AiProfile } from "../src/core/systems/aiSystem";
 import { CombatSystem } from "../src/core/systems/combatSystem";
 import { MovementSystem } from "../src/core/systems/movementSystem";
 import { createSeededRng } from "../src/core/rng";
@@ -45,10 +45,8 @@ export interface GameConfig {
   height: number;
   /** Counted per player move, so one full round is two turns. */
   maxTurns: number;
-  /** AI income multiplier per player. */
-  incomeMultiplier: [number, number];
-  /** Smart purchasing per player; defaults to on for both. */
-  smartPurchase?: [boolean, boolean];
+  /** AI profile per player. */
+  profiles: [AiProfile, AiProfile];
 }
 
 export interface GameResult {
@@ -77,9 +75,9 @@ export function playGame(config: GameConfig): GameResult {
   const movementSystem = new MovementSystem();
   const combatSystem = new CombatSystem(rng);
   const ais = [0, 1].map((player) => {
-    const ai = new AiSystem(movementSystem, combatSystem);
-    ai.configure(player as PlayerId, config.incomeMultiplier[player]);
-    ai.setSmartPurchase(config.smartPurchase?.[player] ?? true);
+    const ai = new AiSystem(movementSystem, combatSystem, rng);
+    ai.configure(player as PlayerId, config.profiles[player]);
+    game.setIncomeMultiplier(player as PlayerId, ai.getIncomeMultiplier(player as PlayerId));
     return ai;
   });
 
@@ -117,12 +115,9 @@ export interface BatchConfig {
   width: number;
   height: number;
   maxTurns: number;
-  /** Income multiplier of side A and side B. */
-  multiplierA: number;
-  multiplierB: number;
-  /** Side A and side B use the smart purchasing (default) or the basic fixed list. */
-  smartPurchaseA?: boolean;
-  smartPurchaseB?: boolean;
+  /** AI profile of side A and side B. */
+  profileA: AiProfile;
+  profileB: AiProfile;
 }
 
 export interface BatchResult {
@@ -155,12 +150,7 @@ export function runBatch(
       width: config.width,
       height: config.height,
       maxTurns: config.maxTurns,
-      incomeMultiplier: aIsPlayer0
-        ? [config.multiplierA, config.multiplierB]
-        : [config.multiplierB, config.multiplierA],
-      smartPurchase: aIsPlayer0
-        ? [config.smartPurchaseA ?? true, config.smartPurchaseB ?? true]
-        : [config.smartPurchaseB ?? true, config.smartPurchaseA ?? true],
+      profiles: aIsPlayer0 ? [config.profileA, config.profileB] : [config.profileB, config.profileA],
     });
 
     if (result.winner === null) {

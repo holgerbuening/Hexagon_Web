@@ -4,7 +4,7 @@ import { GameCore } from "../src/core/gameCore";
 import { axialDistance } from "../src/core/hexMath";
 import { createSeededRng } from "../src/core/rng";
 import { FieldType } from "../src/core/map/fieldTypes";
-import { AiSystem } from "../src/core/systems/aiSystem";
+import { AiSystem, aiProfiles, type AiProfile } from "../src/core/systems/aiSystem";
 import { CombatSystem } from "../src/core/systems/combatSystem";
 import { MovementSystem } from "../src/core/systems/movementSystem";
 import { Unit } from "../src/core/units/unit";
@@ -65,7 +65,8 @@ describe("AI turn", () => {
   // Flat open field with both headquarters in the far corners and no money to buy units.
   function createScenario(
     units: (place: (col: number, row: number) => { q: number; r: number }) => Unit[],
-    balance = 0
+    balance = 0,
+    profile: AiProfile = aiProfiles.normal
   ) {
     const rng = createSeededRng(7);
     const game = new GameCore(10, 10, rng);
@@ -88,8 +89,8 @@ describe("AI turn", () => {
     ];
     state.playerBalances = [0, balance];
     state.currentPlayer = 1;
-    const ai = new AiSystem(new MovementSystem(), new CombatSystem(rng));
-    ai.configure(1, 1);
+    const ai = new AiSystem(new MovementSystem(), new CombatSystem(rng), rng);
+    ai.configure(1, profile);
     return { game, state, ai };
   }
 
@@ -142,6 +143,35 @@ describe("AI turn", () => {
       return [new Unit(UnitType.Infantry, from.q, from.r, 1), new Unit(UnitType.Infantry, far.q, far.r, 0)];
     });
     assert.deepEqual(runAiTurn(game, ai), []);
+  });
+
+  describe("difficulty profiles", () => {
+    const advance = (profile: AiProfile) => {
+      let walker!: Unit;
+      const { game, ai } = createScenario((place) => {
+        const from = place(0, 0);
+        const far = place(9, 0);
+        walker = new Unit(UnitType.Infantry, from.q, from.r, 1);
+        return [walker, new Unit(UnitType.Infantry, far.q, far.r, 0)];
+      }, 0, profile);
+      const start = { q: walker.q, r: walker.r };
+      runAiTurn(game, ai);
+      return axialDistance(start, walker);
+    };
+
+    it("advances with the normal profile", () => {
+      assert.ok(advance(aiProfiles.normal) > 0);
+    });
+
+    it("stays put when the profile always idles", () => {
+      assert.equal(advance({ ...aiProfiles.easy, idleChance: 1 }), 0);
+    });
+
+    it("makes weaker play out of easy than normal", () => {
+      assert.ok(aiProfiles.easy.mistakeChance > aiProfiles.normal.mistakeChance);
+      assert.ok(aiProfiles.easy.idleChance > aiProfiles.normal.idleChance);
+      assert.ok(aiProfiles.hard.incomeMultiplier > aiProfiles.normal.incomeMultiplier);
+    });
   });
 
   it("assigns focus fire without wasting attacks on a unit that is already destroyed", () => {
@@ -213,8 +243,31 @@ describe("AI turn", () => {
   });
 });
 
+describe("income", () => {
+  it("applies the income multiplier set for a player", () => {
+    const base = new GameCore(10, 10, createSeededRng(11));
+    base.configureAi(null);
+    const boosted = new GameCore(10, 10, createSeededRng(11));
+    boosted.configureAi(null);
+    boosted.setIncomeMultiplier(0, 2);
+
+    base.endTurn();
+    boosted.endTurn();
+
+    const gain = base.getBalance(0) - 50;
+    assert.ok(gain > 0);
+    assert.equal(boosted.getBalance(0) - 50, gain * 2);
+  });
+});
+
 describe("simulation", () => {
-  const config = { seed: 3, width: 12, height: 10, maxTurns: 80, incomeMultiplier: [1, 1] as [number, number] };
+  const config = {
+    seed: 3,
+    width: 12,
+    height: 10,
+    maxTurns: 80,
+    profiles: [aiProfiles.hard, aiProfiles.easy] as [typeof aiProfiles.hard, typeof aiProfiles.easy],
+  };
 
   it("plays the same game twice for the same seed", () => {
     const first = playGame(config);

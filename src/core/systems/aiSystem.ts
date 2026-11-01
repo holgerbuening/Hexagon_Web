@@ -5,6 +5,7 @@ import { MovementSystem } from "./movementSystem";
 import { CombatSystem } from "./combatSystem";
 import { Unit } from "../units/unit";
 import { UnitType, UNIT_TYPES } from "../units/unitType";
+import type { Rng } from "../rng";
 
 interface GetTile {
   (pos: Axial): HexTile | undefined;
@@ -28,10 +29,56 @@ interface Spend {
 
 export type AiDifficulty = "easy" | "normal" | "hard";
 
-export const aiDifficultyMultipliers: Record<AiDifficulty, number> = {
-  easy: 1.0,
-  normal: 1.5,
-  hard: 2.0,
+/** How the AI plays. Difficulty levels differ in behavior, not only in income. */
+export interface AiProfile {
+  incomeMultiplier: number;
+  /** Chance that an attack is picked at random from the acceptable ones instead of the best one. */
+  mistakeChance: number;
+  /** Chance that a unit does not advance this turn. */
+  idleChance: number;
+  /** Scales how much the AI avoids tiles where enemies can hit hard; 0 ignores the danger. */
+  threatWeight: number;
+  /** Plan attacks so that damage is not wasted on units that are already as good as destroyed. */
+  focusFire: boolean;
+  /** Counter the enemy army and save up instead of buying from a fixed list. */
+  smartPurchase: boolean;
+  /** Units below this share of their maximum HP leave the fight. */
+  retreatHpRatio: number;
+  /** Nearby units hunt enemies that come close to the own headquarter. */
+  defendHeadquarter: boolean;
+}
+
+export const aiProfiles: Record<AiDifficulty, AiProfile> = {
+  easy: {
+    incomeMultiplier: 1,
+    mistakeChance: 0.5,
+    idleChance: 0.3,
+    threatWeight: 0,
+    focusFire: false,
+    smartPurchase: false,
+    retreatHpRatio: 0.15,
+    defendHeadquarter: false,
+  },
+  normal: {
+    incomeMultiplier: 1,
+    mistakeChance: 0,
+    idleChance: 0,
+    threatWeight: 1,
+    focusFire: true,
+    smartPurchase: true,
+    retreatHpRatio: 0.3,
+    defendHeadquarter: false,
+  },
+  hard: {
+    incomeMultiplier: 1.5,
+    mistakeChance: 0,
+    idleChance: 0,
+    threatWeight: 1,
+    focusFire: true,
+    smartPurchase: true,
+    retreatHpRatio: 0.3,
+    defendHeadquarter: true,
+  },
 };
 
 export class AiSystem {
@@ -46,20 +93,20 @@ export class AiSystem {
   private static readonly COMBAT_UNITS_PER_MEDIC = 6;
   // Each unit of a type already owned lowers its appeal, so armies stay mixed.
   private static readonly OWN_TYPE_PENALTY = 0.15;
-  // Enemies this close to a headquarter stop the AI from saving money.
+  // Enemies this close to a headquarter stop the AI from saving money and call for defenders.
   private static readonly HQ_DANGER_DISTANCE = 6;
+  // Only units this close to their headquarter take part in its defense.
+  private static readonly HQ_DEFENDER_DISTANCE = 10;
   private static readonly SAVING_HORIZON_TURNS = 3;
   private static readonly SAVING_SCORE_MARGIN = 0.1;
   // Roads are a luxury: an engineer is only bought with a decent army and money left over.
   private static readonly ENGINEER_MIN_ARMY = 6;
   private static readonly ENGINEER_RESERVE = 300;
-  // Units below this share of their maximum HP leave the fight.
-  private static readonly RETREAT_HP_RATIO = 0.3;
   private movementSystem: MovementSystem;
   private combatSystem: CombatSystem;
+  private readonly rng: Rng;
   private aiPlayer: PlayerId | null = 1;
-  private aiDifficultyMultiplier: number = 1.0;
-  private smartPurchase = true;
+  private profile: AiProfile = aiProfiles.normal;
   // Expected damage already assigned to enemy units in the current AI turn (focus fire, no overkill).
   private plannedDamage = new Map<Unit, number>();
   // Path cost to a target tile, cached per target because costs do not depend on the unit.
@@ -67,14 +114,15 @@ export class AiSystem {
   private tileIndex = new Map<string, HexTile>();
   private tileIndexSource: HexTile[] | null = null;
 
-  constructor(movementSystem: MovementSystem, combatSystem: CombatSystem) {
+  constructor(movementSystem: MovementSystem, combatSystem: CombatSystem, rng: Rng = Math.random) {
     this.movementSystem = movementSystem;
     this.combatSystem = combatSystem;
+    this.rng = rng;
   }
 
-  public configure(player: PlayerId | null, difficultyMultiplier = aiDifficultyMultipliers.normal): void {
+  public configure(player: PlayerId | null, profile: AiProfile = aiProfiles.normal): void {
     this.aiPlayer = player;
-    this.aiDifficultyMultiplier = Math.max(1, difficultyMultiplier);
+    this.profile = profile;
   }
 
   public shouldRun(state: GameState): boolean {
@@ -84,16 +132,7 @@ export class AiSystem {
   public getIncomeMultiplier(player: PlayerId): number {
     if (this.aiPlayer === null) return 1;
     if (this.aiPlayer !== player) return 1;
-    return this.aiDifficultyMultiplier;
-  }
-
-  public setDifficultyMultiplier(multiplier: number): void {
-    this.aiDifficultyMultiplier = Math.max(1, multiplier);
-  }
-
-  /** Smart purchasing counters the enemy army and saves up; the basic one follows a fixed list. */
-  public setSmartPurchase(enabled: boolean): void {
-    this.smartPurchase = enabled;
+    return Math.max(1, this.profile.incomeMultiplier);
   }
 
   public runTurn(
@@ -135,7 +174,6 @@ export class AiSystem {
       });
     }
 
-
     for (const unit of aiUnits) {
       // Older saves may contain engineers without a road plan.
       if (unit.type === UnitType.Engineer && unit.roadBuildPath.length === 0) {
@@ -160,7 +198,7 @@ export class AiSystem {
         continue;
       }
 
-      if (unit.hp < unit.maxHP * AiSystem.RETREAT_HP_RATIO && this.tryRetreat(state, unit, getNeighbors)) continue;
+      if (unit.hp < unit.maxHP * this.profile.retreatHpRatio && this.tryRetreat(state, unit, getNeighbors)) continue;
 
       const preview = this.tryAttack(state, unit, getTile, getNeighbors);
       if (preview) {
@@ -182,7 +220,7 @@ export class AiSystem {
     spend: Spend
   ): void {
     if (this.aiPlayer === null || state.currentPlayer !== this.aiPlayer) return;
-    if (this.smartPurchase) {
+    if (this.profile.smartPurchase) {
       this.purchaseUnitsSmart(state, getNeighbors, getUnitAt, canAfford, spend);
     } else {
       this.purchaseUnitsBasic(state, getNeighbors, getUnitAt, canAfford, spend);
@@ -460,7 +498,9 @@ export class AiSystem {
     }
 
     const bestTarget = plan.target;
-    this.plannedDamage.set(bestTarget, (this.plannedDamage.get(bestTarget) ?? 0) + plan.damage);
+    if (this.profile.focusFire) {
+      this.plannedDamage.set(bestTarget, (this.plannedDamage.get(bestTarget) ?? 0) + plan.damage);
+    }
 
     attacker.pos = { q: attacker.q, r: attacker.r };
     bestTarget.pos = { q: bestTarget.q, r: bestTarget.r };
@@ -548,7 +588,7 @@ export class AiSystem {
 
     const enemies = state.units.filter((unit) => unit.owner !== attacker.owner);
     const value = this.unitValue(attacker);
-    let best: { from: Axial; target: Unit; damage: number; total: number } | null = null;
+    const options: { from: Axial; target: Unit; damage: number; total: number }[] = [];
 
     for (const candidate of candidates) {
       let positionBest: { target: Unit; damage: number; score: number } | null = null;
@@ -563,14 +603,22 @@ export class AiSystem {
 
       // Prefer defensible, low-threat positions; this also makes ranged units keep their distance.
       const terrain = (getFieldDef(this.fieldAt(state, candidate.pos)).defense / 100) * value * 0.15;
-      const threat = (this.estimateThreat(state, attacker, candidate.pos) / 100) * value * 0.5;
+      const threat = (this.estimateThreat(state, attacker, candidate.pos) / 100) * value * 0.5 *
+        this.profile.threatWeight;
       const total = positionBest.score + terrain - threat - candidate.moveCost * 0.5;
-      if (!best || total > best.total) {
-        best = { from: candidate.pos, target: positionBest.target, damage: positionBest.damage, total };
-      }
+      options.push({ from: candidate.pos, target: positionBest.target, damage: positionBest.damage, total });
     }
 
-    if (!best) return null;
+    if (options.length === 0) return null;
+    let best = options[0]!;
+    for (const option of options) {
+      if (option.total > best.total) best = option;
+    }
+    // A weaker player sometimes does not pick the best of the acceptable attacks.
+    if (options.length > 1 && this.rng() < this.profile.mistakeChance) {
+      best = options[Math.floor(this.rng() * options.length)]!;
+    }
+
     const moves = best.from.q !== origin.q || best.from.r !== origin.r;
     return { from: best.from, target: best.target, damage: best.damage, reachable: moves ? reachable : null };
   }
@@ -584,6 +632,7 @@ export class AiSystem {
     attackingUnits: ReadonlySet<Unit>
   ): boolean {
     if (unit.acted || unit.remainingMovement <= 0) return false;
+    if (this.profile.idleChance > 0 && this.rng() < this.profile.idleChance) return false;
     //keep the city and industry units in place
     const currentTile = this.getTile(state, { q: unit.q, r: unit.r });
     if (currentTile && this.isCityOrIndustry(currentTile)) return false;
@@ -645,7 +694,8 @@ export class AiSystem {
       const pathCost = field.get(MovementSystem.key(pos.q, pos.r)) ?? 1000 + axialDistance(pos, target);
       if (pos.q === target.q && pos.r === target.r) return pathCost;
       const terrain = getFieldDef(this.fieldAt(state, pos)).defense / 50;
-      const threat = Math.min(2, (this.estimateThreat(state, unit, pos) / Math.max(1, unit.hp)) * 1.5);
+      const threat = Math.min(2, (this.estimateThreat(state, unit, pos) / Math.max(1, unit.hp)) * 1.5) *
+        this.profile.threatWeight;
       return pathCost - terrain + threat;
     };
 
@@ -704,7 +754,7 @@ export class AiSystem {
   private canRelieveGarrison(unit: Unit): boolean {
     return unit.type !== UnitType.MilitaryBase &&
       unit.type !== UnitType.Engineer && unit.type !== UnitType.Medic &&
-      !unit.acted && unit.remainingMovement > 0 && unit.hp >= unit.maxHP * AiSystem.RETREAT_HP_RATIO;
+      !unit.acted && unit.remainingMovement > 0 && unit.hp >= unit.maxHP * this.profile.retreatHpRatio;
   }
 
   private findAdvancePath(
@@ -1111,7 +1161,36 @@ export class AiSystem {
     return true;
   }
 
+  /** Closest enemy that threatens a nearby own headquarter, as a position to attack it from. */
+  private findHeadquarterDefenseTarget(state: GameState, unit: Unit): Axial | null {
+    let threat: Unit | null = null;
+    let threatDistance = Number.POSITIVE_INFINITY;
+
+    for (const hq of state.units) {
+      if (hq.owner !== unit.owner || hq.type !== UnitType.MilitaryBase) continue;
+      if (axialDistance(unit, hq) > AiSystem.HQ_DEFENDER_DISTANCE) continue;
+
+      for (const enemy of state.units) {
+        if (enemy.owner === unit.owner || enemy.type === UnitType.MilitaryBase) continue;
+        if (axialDistance(enemy, hq) > AiSystem.HQ_DANGER_DISTANCE) continue;
+        const distance = axialDistance(unit, enemy);
+        if (distance < threatDistance) {
+          threatDistance = distance;
+          threat = enemy;
+        }
+      }
+    }
+
+    if (!threat) return null;
+    return this.findClosestFreeTileInRange(state, unit, threat) ?? { q: threat.q, r: threat.r };
+  }
+
   private findTarget(state: GameState, unit: Unit, allowFreeTargets: boolean): Axial | null {
+    if (this.profile.defendHeadquarter) {
+      const defenseTarget = this.findHeadquarterDefenseTarget(state, unit);
+      if (defenseTarget) return defenseTarget;
+    }
+
     if (allowFreeTargets) {
       const freeTarget = this.findClosestUnoccupiedCityOrIndustry(state, unit);
       if (freeTarget) return freeTarget;
