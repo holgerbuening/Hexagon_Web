@@ -75,6 +75,7 @@ export class AiSystem {
     ): CombatPreviewEntry[] {
     if (!this.shouldRun(state)) return [];
     const combatPreviews: CombatPreviewEntry[] = [];
+    const attackingUnits = new Set<Unit>();
 
     this.purchaseUnits(state, getNeighbors, getUnitAt, canAfford, spend);
 
@@ -111,7 +112,7 @@ export class AiSystem {
 
       if (unit.type === UnitType.Medic) {
         if (this.tryHeal(state, unit)) continue;
-        this.tryMoveToInjured(state, unit, getNeighbors);
+        this.tryMoveToInjured(state, unit, getNeighbors);https://open.spotify.com/playlist/3R7s2bH3MNPLw6QVYZImbD
         continue;
       }
       
@@ -131,10 +132,11 @@ export class AiSystem {
       const preview = this.tryAttack(state, unit, getTile);
       if (preview) {
         combatPreviews.push(preview);
+        attackingUnits.add(unit);
         continue;
       }
 
-      this.tryMove(state, unit, getNeighbors, hasUnoccupiedCitiesOrIndustries, hasUnactedCavalry);
+      this.tryMove(state, unit, getNeighbors, hasUnoccupiedCitiesOrIndustries, hasUnactedCavalry, attackingUnits);
     }
     return combatPreviews;
   }
@@ -317,7 +319,8 @@ export class AiSystem {
     unit: Unit,
     getNeighbors: GetNeighbors,
     hasUnoccupiedCitiesOrIndustries: boolean,
-    hasUnactedCavalry: boolean
+    hasUnactedCavalry: boolean,
+    attackingUnits: ReadonlySet<Unit>
   ): boolean {
     if (unit.acted || unit.remainingMovement <= 0) return false;
     //keep the city and industry units in place
@@ -330,6 +333,8 @@ export class AiSystem {
       hasUnactedCavalry;
     const target = this.findTarget(state, unit, !shouldReserveCapturesForCavalry);
     if (!target) return false;
+
+    if (this.tryRelieveGarrison(state, unit, target, getNeighbors, attackingUnits)) return true;
 
     const reachableTiles = this.movementSystem.computeReachableTiles(
       state,
@@ -375,6 +380,115 @@ export class AiSystem {
     }
 
     return moved;
+  }
+
+  private canRelieveGarrison(unit: Unit): boolean {
+    return unit.type !== UnitType.MilitaryBase &&
+      unit.type !== UnitType.Engineer && unit.type !== UnitType.Medic &&
+      !unit.acted && unit.remainingMovement > 0 && unit.hp >= 15;
+  }
+
+  private findAdvancePath(
+    state: GameState,
+    unit: Unit,
+    target: Axial,
+    getNeighbors: GetNeighbors
+  ): Axial[] | null {
+    const occupant = this.getUnitAt(state, target);
+    if (occupant && occupant.owner === unit.owner) return null;
+
+    // An occupied enemy tile is approached via a free position in attack range.
+    const destinations = occupant
+      ? state.tiles.filter((tile) => tile.field !== FieldType.Ocean &&
+          axialDistance(tile, target) <= unit.attackRange && !this.getUnitAt(state, tile))
+      : [target];
+
+    let bestPath: Axial[] | null = null;
+    for (const destination of destinations) {
+      const path = this.movementSystem.computePathToTarget(
+        state, unit, destination, getNeighbors, { maxCost: Number.POSITIVE_INFINITY }
+      );
+      if (path && (bestPath === null || path.length < bestPath.length)) bestPath = path;
+    }
+    return bestPath;
+  }
+
+  private tryRelieveGarrison(
+    state: GameState,
+    replacement: Unit,
+    target: Axial,
+    getNeighbors: GetNeighbors,
+    attackingUnits: ReadonlySet<Unit>
+  ): boolean {
+    if (!this.canRelieveGarrison(replacement)) return false;
+
+    const candidates = state.units.filter((unit) => unit !== replacement &&
+      unit.owner === replacement.owner && this.canRelieveGarrison(unit) &&
+      !attackingUnits.has(unit) &&
+      axialDistance(unit, target) < axialDistance(replacement, target)
+    ).sort((left, right) => axialDistance(left, target) - axialDistance(right, target));
+
+    for (const garrison of candidates) {
+      const holding = this.getTile(state, garrison);
+      if (!holding || !this.isCityOrIndustry(holding)) continue;
+
+      // Preserve attacks even when this garrison has not been processed yet.
+      if (state.units.some((enemy) => enemy.owner !== garrison.owner &&
+          axialDistance(garrison, enemy) <= garrison.attackRange)) continue;
+
+      // Check the takeover without changing the live position of the garrison.
+      const clearedState: GameState = {
+        ...state,
+        units: state.units.filter((unit) => unit !== garrison),
+      };
+      const arrivalReachable = this.movementSystem.computeReachableTiles(clearedState, replacement, getNeighbors);
+      if (arrivalReachable[MovementSystem.key(holding.q, holding.r)] === undefined) continue;
+      const arrivalPath = this.movementSystem.computePathToTarget(clearedState, replacement, holding, getNeighbors);
+      if (!arrivalPath || arrivalPath.length === 0) continue;
+
+      const advancePath = this.findAdvancePath(state, garrison, target, getNeighbors);
+      if (!advancePath || advancePath.length === 0) continue;
+      const replacementAdvance = this.findAdvancePath(clearedState, replacement, target, getNeighbors);
+      if (replacementAdvance && advancePath.length >= replacementAdvance.length) continue;
+
+      const departureReachable = this.movementSystem.computeReachableTiles(state, garrison, getNeighbors);
+      const departurePath: Axial[] = [];
+      for (const step of advancePath) {
+        if (departureReachable[MovementSystem.key(step.q, step.r)] === undefined) break;
+        departurePath.push(step);
+      }
+
+      // The departing unit must leave the entire takeover route clear.
+      // Avoid stopping on another holding unless that holding is the assigned goal.
+      while (departurePath.length > 0) {
+        const destination = departurePath[departurePath.length - 1]!;
+        const tile = this.getTile(state, destination);
+        const blocksArrival = arrivalPath.some((step) => step.q === destination.q && step.r === destination.r);
+        const stopsOnOtherHolding = tile && this.isCityOrIndustry(tile) &&
+          (destination.q !== target.q || destination.r !== target.r);
+        if (!blocksArrival && !stopsOnOtherHolding) break;
+        departurePath.pop();
+      }
+      const destination = departurePath[departurePath.length - 1];
+      if (!destination) continue;
+
+      const previousMovement = garrison.remainingMovement;
+      if (!this.movementSystem.tryMoveUsingReachable(state, garrison, destination, departureReachable)) continue;
+      if (!this.movementSystem.tryMoveUsingReachable(state, replacement, holding, arrivalReachable)) {
+        garrison.q = holding.q;
+        garrison.r = holding.r;
+        garrison.remainingMovement = previousMovement;
+        continue;
+      }
+
+      // Both units are finished for this turn, preventing repeated handovers.
+      garrison.acted = true;
+      replacement.acted = true;
+      garrison.animationPath = departurePath;
+      replacement.animationPath = arrivalPath;
+      return true;
+    }
+    return false;
   }
 
   private tryMoveEngineer(
