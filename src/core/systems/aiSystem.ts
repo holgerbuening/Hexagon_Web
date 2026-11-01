@@ -1,6 +1,6 @@
 import type { Axial, CombatPreviewEntry, GameState, HexTile, PlayerId } from "../types";
 import { axialDistance } from "../hexMath";
-import { FieldType } from "../map/fieldTypes";
+import { FieldType, getFieldDef } from "../map/fieldTypes";
 import { MovementSystem } from "./movementSystem";
 import { CombatSystem } from "./combatSystem";
 import { Unit } from "../units/unit";
@@ -30,8 +30,8 @@ export type AiDifficulty = "easy" | "normal" | "hard";
 
 export const aiDifficultyMultipliers: Record<AiDifficulty, number> = {
   easy: 1.0,
-  normal: 2.0,
-  hard: 3.0,
+  normal: 1.5,
+  hard: 2.0,
 };
 
 export class AiSystem {
@@ -40,6 +40,12 @@ export class AiSystem {
   private combatSystem: CombatSystem;
   private aiPlayer: PlayerId | null = 1;
   private aiDifficultyMultiplier: number = 1.0;
+  // Expected damage already assigned to enemy units in the current AI turn (focus fire, no overkill).
+  private plannedDamage = new Map<Unit, number>();
+  // Path cost to a target tile, cached per target because costs do not depend on the unit.
+  private costFieldCache = new Map<string, Map<string, number>>();
+  private tileIndex = new Map<string, HexTile>();
+  private tileIndexSource: HexTile[] | null = null;
 
   constructor(movementSystem: MovementSystem, combatSystem: CombatSystem) {
     this.movementSystem = movementSystem;
@@ -76,6 +82,8 @@ export class AiSystem {
     if (!this.shouldRun(state)) return [];
     const combatPreviews: CombatPreviewEntry[] = [];
     const attackingUnits = new Set<Unit>();
+    this.plannedDamage.clear();
+    this.costFieldCache.clear();
 
     this.purchaseUnits(state, getNeighbors, getUnitAt, canAfford, spend);
 
@@ -112,7 +120,7 @@ export class AiSystem {
 
       if (unit.type === UnitType.Medic) {
         if (this.tryHeal(state, unit)) continue;
-        this.tryMoveToInjured(state, unit, getNeighbors);https://open.spotify.com/playlist/3R7s2bH3MNPLw6QVYZImbD
+        this.tryMoveToInjured(state, unit, getNeighbors);
         continue;
       }
       
@@ -129,7 +137,7 @@ export class AiSystem {
 
       if (unit.hp < 15 && this.tryRetreat(state, unit, getNeighbors)) continue;
 
-      const preview = this.tryAttack(state, unit, getTile);
+      const preview = this.tryAttack(state, unit, getTile, getNeighbors);
       if (preview) {
         combatPreviews.push(preview);
         attackingUnits.add(unit);
@@ -284,26 +292,25 @@ export class AiSystem {
   private tryAttack(
     state: GameState,
     attacker: Unit,
-    getTile: GetTile
+    getTile: GetTile,
+    getNeighbors: GetNeighbors
     ): CombatPreviewEntry | null {
     if (attacker.type === UnitType.Engineer) return null;
     if (attacker.acted) return null;
 
-    let bestTarget: Unit | null = null;
-    let bestDistance = Number.POSITIVE_INFINITY;
+    const plan = this.findBestAttack(state, attacker, getNeighbors);
+    if (!plan) return null;
 
-    for (const unit of state.units) {
-      if (unit.owner === attacker.owner) continue;
-      const distance = axialDistance({ q: attacker.q, r: attacker.r }, { q: unit.q, r: unit.r });
-      if (distance > attacker.attackRange) continue;
-
-      if (distance < bestDistance) {
-        bestDistance = distance;
-        bestTarget = unit;
-      }
+    // Move first; the attack itself stays pending until the combat dialog confirms it.
+    if (plan.reachable) {
+      const path = this.movementSystem.computePathToTarget(state, attacker, plan.from, getNeighbors);
+      if (!path) return null;
+      if (!this.movementSystem.tryMoveUsingReachable(state, attacker, plan.from, plan.reachable)) return null;
+      attacker.animationPath = path;
     }
 
-    if (!bestTarget) return null;
+    const bestTarget = plan.target;
+    this.plannedDamage.set(bestTarget, (this.plannedDamage.get(bestTarget) ?? 0) + plan.damage);
 
     attacker.pos = { q: attacker.q, r: attacker.r };
     bestTarget.pos = { q: bestTarget.q, r: bestTarget.r };
@@ -312,6 +319,110 @@ export class AiSystem {
     const attackerSnapshot = Unit.serialize(attacker);
     const defenderSnapshot = Unit.serialize(bestTarget);
     return { preview, attacker: attackerSnapshot, defender: defenderSnapshot };
+  }
+
+  private unitValue(unit: Unit): number {
+    if (unit.type === UnitType.MilitaryBase) return 800;
+    return unit.data.price;
+  }
+
+  private fieldAt(state: GameState, pos: Axial): FieldType {
+    return this.getTile(state, pos)?.field ?? FieldType.Farmland;
+  }
+
+  /**
+   * Rates an attack from a position by expected damage dealt versus taken, weighted by unit price.
+   * Returns null if the target is out of range or already counted as destroyed.
+   */
+  private scoreAttack(
+    state: GameState,
+    attacker: Unit,
+    target: Unit,
+    from: Axial
+  ): { score: number; damage: number } | null {
+    const distance = axialDistance(from, target);
+    if (distance > attacker.attackRange) return null;
+
+    const remaining = target.hp - (this.plannedDamage.get(target) ?? 0);
+    if (remaining <= 0) return null;
+
+    const targetTile = this.getTile(state, target);
+    const outcome = this.combatSystem.estimateOutcome(attacker, target, this.fieldAt(state, target), distance);
+    const dealt = Math.min(outcome.damageDefender, remaining);
+    const taken = Math.min(outcome.damageAttacker, attacker.hp);
+
+    let score = (dealt / 100) * this.unitValue(target) - (taken / 100) * this.unitValue(attacker);
+    if (dealt >= remaining) {
+      score += this.unitValue(target) * 0.5;
+      if (targetTile && this.isCityOrIndustry(targetTile)) score += 25;
+    }
+    return { score, damage: dealt };
+  }
+
+  /** Expected damage a unit may suffer on a tile during the next enemy turn. */
+  private estimateThreat(state: GameState, unit: Unit, pos: Axial): number {
+    const field = this.fieldAt(state, pos);
+    let total = 0;
+    for (const enemy of state.units) {
+      if (enemy.owner === unit.owner || enemy.offense <= 0) continue;
+      if (enemy.hp - (this.plannedDamage.get(enemy) ?? 0) <= 0) continue;
+
+      const distance = axialDistance(enemy, pos);
+      if (distance > enemy.data.maxMovement + enemy.attackRange) continue;
+
+      const outcome = this.combatSystem.estimateOutcome(enemy, unit, field, Math.min(distance, enemy.attackRange));
+      const likelihood = distance <= enemy.attackRange ? 1 : 0.6;
+      total += outcome.damageDefender * likelihood;
+    }
+    return Math.min(total, unit.hp);
+  }
+
+  private findBestAttack(
+    state: GameState,
+    attacker: Unit,
+    getNeighbors: GetNeighbors
+  ): { from: Axial; target: Unit; damage: number; reachable: Record<string, number> | null } | null {
+    const origin: Axial = { q: attacker.q, r: attacker.r };
+    const originTile = this.getTile(state, origin);
+    const holdsPosition = !!originTile && this.isCityOrIndustry(originTile);
+
+    const candidates: { pos: Axial; moveCost: number }[] = [{ pos: origin, moveCost: 0 }];
+    let reachable: Record<string, number> | null = null;
+    if (!holdsPosition && attacker.remainingMovement > 0 && attacker.type !== UnitType.MilitaryBase) {
+      reachable = this.movementSystem.computeReachableTiles(state, attacker, getNeighbors);
+      for (const key of Object.keys(reachable)) {
+        const [qStr, rStr] = key.split(",");
+        candidates.push({ pos: { q: Number(qStr), r: Number(rStr) }, moveCost: reachable[key]! });
+      }
+    }
+
+    const enemies = state.units.filter((unit) => unit.owner !== attacker.owner);
+    const value = this.unitValue(attacker);
+    let best: { from: Axial; target: Unit; damage: number; total: number } | null = null;
+
+    for (const candidate of candidates) {
+      let positionBest: { target: Unit; damage: number; score: number } | null = null;
+      for (const enemy of enemies) {
+        const rated = this.scoreAttack(state, attacker, enemy, candidate.pos);
+        if (!rated || rated.score <= 0) continue;
+        if (!positionBest || rated.score > positionBest.score) {
+          positionBest = { target: enemy, damage: rated.damage, score: rated.score };
+        }
+      }
+      if (!positionBest) continue;
+
+      // Prefer defensible, low-threat positions; this also makes ranged units keep their distance.
+      const terrain = (getFieldDef(this.fieldAt(state, candidate.pos)).defense / 100) * value * 0.15;
+      const threat = (this.estimateThreat(state, attacker, candidate.pos) / 100) * value * 0.5;
+      const total = positionBest.score + terrain - threat - candidate.moveCost * 0.5;
+      if (!best || total > best.total) {
+        best = { from: candidate.pos, target: positionBest.target, damage: positionBest.damage, total };
+      }
+    }
+
+    if (!best) return null;
+    const moves = best.from.q !== origin.q || best.from.r !== origin.r;
+    return { from: best.from, target: best.target, damage: best.damage, reachable: moves ? reachable : null };
   }
 
   private tryMove(
@@ -344,21 +455,7 @@ export class AiSystem {
       }
     );
 
-    let bestMove: Axial | null = null;
-    let bestDistance = Number.POSITIVE_INFINITY;
-
-    for (const key of Object.keys(reachableTiles)) {
-      const [qStr, rStr] = key.split(",");
-      const q = Number(qStr);
-      const r = Number(rStr);
-      const dist = axialDistance({ q, r }, target);
-
-      if (dist < bestDistance) {
-        bestDistance = dist;
-        bestMove = { q, r };
-      }
-    }
-
+    const bestMove = this.chooseAdvanceTile(state, unit, target, reachableTiles, getNeighbors);
     if (!bestMove) return false;
 
     const path = this.movementSystem.computePathToTarget(
@@ -380,6 +477,78 @@ export class AiSystem {
     }
 
     return moved;
+  }
+
+  /**
+   * Picks the reachable tile that is closest to the target by real path cost,
+   * preferring defensible tiles and avoiding heavy enemy threat. Returns null if staying is better.
+   */
+  private chooseAdvanceTile(
+    state: GameState,
+    unit: Unit,
+    target: Axial,
+    reachableTiles: Record<string, number>,
+    getNeighbors: GetNeighbors
+  ): Axial | null {
+    const field = this.getCostField(state, target, getNeighbors);
+    const rate = (pos: Axial): number => {
+      const pathCost = field.get(MovementSystem.key(pos.q, pos.r)) ?? 1000 + axialDistance(pos, target);
+      if (pos.q === target.q && pos.r === target.r) return pathCost;
+      const terrain = getFieldDef(this.fieldAt(state, pos)).defense / 50;
+      const threat = Math.min(2, (this.estimateThreat(state, unit, pos) / Math.max(1, unit.hp)) * 1.5);
+      return pathCost - terrain + threat;
+    };
+
+    let bestMove: Axial | null = null;
+    let bestRating = rate({ q: unit.q, r: unit.r });
+    for (const key of Object.keys(reachableTiles)) {
+      const [qStr, rStr] = key.split(",");
+      const pos = { q: Number(qStr), r: Number(rStr) };
+      const rating = rate(pos);
+      if (rating < bestRating) {
+        bestRating = rating;
+        bestMove = pos;
+      }
+    }
+    return bestMove;
+  }
+
+  /** Remaining movement cost from every tile to the target, ignoring units. */
+  private getCostField(state: GameState, target: Axial, getNeighbors: GetNeighbors): Map<string, number> {
+    const cacheKey = MovementSystem.key(target.q, target.r);
+    const cached = this.costFieldCache.get(cacheKey);
+    if (cached) return cached;
+
+    const dist = new Map<string, number>([[cacheKey, 0]]);
+    const open: { q: number; r: number; cost: number }[] = [{ q: target.q, r: target.r, cost: 0 }];
+
+    while (open.length > 0) {
+      let bestIdx = 0;
+      for (let i = 1; i < open.length; i++) {
+        if (open[i]!.cost < open[bestIdx]!.cost) bestIdx = i;
+      }
+      const current = open.splice(bestIdx, 1)[0]!;
+      if (current.cost !== dist.get(MovementSystem.key(current.q, current.r))) continue;
+
+      const currentTile = this.getTile(state, current);
+      if (!currentTile) continue;
+      // Stepping from a neighbour onto the current tile costs what the current tile costs.
+      const stepCost = this.movementSystem.getMovementCost(currentTile);
+
+      for (const neighbor of getNeighbors(current.q, current.r)) {
+        if (neighbor.field === FieldType.Ocean) continue;
+        const nextCost = current.cost + stepCost;
+        const key = MovementSystem.key(neighbor.q, neighbor.r);
+        const old = dist.get(key);
+        if (old === undefined || nextCost < old) {
+          dist.set(key, nextCost);
+          open.push({ q: neighbor.q, r: neighbor.r, cost: nextCost });
+        }
+      }
+    }
+
+    this.costFieldCache.set(cacheKey, dist);
+    return dist;
   }
 
   private canRelieveGarrison(unit: Unit): boolean {
@@ -662,9 +831,11 @@ export class AiSystem {
   }
 
   private getTile(state: GameState, pos: Axial): HexTile | undefined {
-    return state.tiles.find(function (tile) {
-      return tile.q === pos.q && tile.r === pos.r;
-    });
+    if (this.tileIndexSource !== state.tiles) {
+      this.tileIndex = new Map(state.tiles.map((tile) => [MovementSystem.key(tile.q, tile.r), tile]));
+      this.tileIndexSource = state.tiles;
+    }
+    return this.tileIndex.get(MovementSystem.key(pos.q, pos.r));
   }
 
   private getUnitAt(state: GameState, pos: Axial): Unit | undefined {

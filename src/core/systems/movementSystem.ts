@@ -27,7 +27,7 @@ export class MovementSystem {
     return true;
   }
 
-  private getMovementCost(tile: HexTile): number {
+  public getMovementCost(tile: HexTile): number {
     // English comment: Keep it simple and readable (no clever one-liners)
     if (tile.hasRoad) return Math.floor(this.getFieldCost(tile.field) / 2);
     return this.getFieldCost(tile.field);

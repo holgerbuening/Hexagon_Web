@@ -106,6 +106,35 @@ export class CombatSystem {
     };
   }
 
+  /**
+   * Deterministic average outcome of an attack, using the same formulas as computePreview.
+   * Used by the AI to rate attacks and positions without rolling dice.
+   */
+  public estimateOutcome(
+    attacker: Unit,
+    defender: Unit,
+    defenderField: FieldType,
+    distance: number
+  ): { damageDefender: number; damageAttacker: number } {
+    const attackBase = attacker.offense + attacker.experience * 10;
+    const defenseBase = defender.defense + defender.experience * 10 + getFieldDef(defenderField).defense;
+
+    // Mean of the random rolls: attack 0.75..1.5 and defense 0.9..1.1 of base, random 0..99.
+    const attackPower = attackBase * (0.75 + 0.75 * 0.495);
+    const defensePower = defenseBase;
+    const result = attackPower - defensePower;
+    const averageRandomDamage = 3;
+
+    const damageDefender = result < 5 ? averageRandomDamage : result + averageRandomDamage;
+
+    let damageAttacker = 0;
+    if (distance <= defender.attackRange) {
+      damageAttacker = result < 0 ? -result + averageRandomDamage : averageRandomDamage;
+    }
+
+    return { damageDefender, damageAttacker };
+  }
+
   public apply(state: GameState, preview: CombatPreview): number {
     // English comment: Apply combat results only after OK in dialog
 
