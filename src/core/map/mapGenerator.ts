@@ -1,6 +1,7 @@
 // src/core/map/mapGenerator.ts
 import type { HexTile } from "../types";
 import { FieldType } from "./fieldTypes";
+import type { Rng } from "../rng";
 
 export interface GeneratedMap {
   tiles: HexTile[];
@@ -8,6 +9,12 @@ export interface GeneratedMap {
 }
 
 export class MapGenerator {
+  private readonly rng: Rng;
+
+  constructor(rng: Rng = Math.random) {
+    this.rng = rng;
+  }
+
   public generate(width: number, height: number): GeneratedMap {
     // English comment: Initialize grid
     const tileGrid: HexTile[][] = [];
@@ -56,12 +63,12 @@ export class MapGenerator {
     const areaCountBase = Math.floor((width * height) / 80);
     const maxSizeBase = Math.floor((width * height) / 60);
 
-    const numAreas = (Math.floor(Math.random() * 4) + 1) + areaCountBase;
-    const maxSize = (Math.floor(Math.random() * 8) + 1) + maxSizeBase;
+    const numAreas = (Math.floor(this.rng() * 4) + 1) + areaCountBase;
+    const maxSize = (Math.floor(this.rng() * 8) + 1) + maxSizeBase;
 
     for (let i = 0; i < numAreas; i++) {
-      const startRow = Math.floor(Math.random() * height);
-      const startCol = Math.floor(Math.random() * width);
+      const startRow = Math.floor(this.rng() * height);
+      const startCol = Math.floor(this.rng() * width);
       this.floodFill(tileGrid, width, height, startCol, startRow, field, maxSize);
     }
   }
@@ -81,7 +88,7 @@ export class MapGenerator {
     // English comment: Ensure minimum area size
     let sizeOfThisArea = maxSize;
     if (sizeOfThisArea < 4) sizeOfThisArea = 4;
-    sizeOfThisArea = Math.floor(Math.random() * (sizeOfThisArea - 3)) + 4;
+    sizeOfThisArea = Math.floor(this.rng() * (sizeOfThisArea - 3)) + 4;
 
     while (stack.length > 0 && painted < sizeOfThisArea) {
       const cur = stack.pop();
@@ -117,7 +124,7 @@ export class MapGenerator {
 
         if (tile.field !== FieldType.Farmland) continue;
 
-        const r = Math.floor(Math.random() * 100);
+        const r = Math.floor(this.rng() * 100);
         if (r < 25) tile.field = FieldType.Hills;
         else if (r < 70) tile.field = FieldType.Woods;
       }
@@ -134,8 +141,8 @@ export class MapGenerator {
       while (!placed && tries < width * height * 2) {
         tries++;
 
-        const row = Math.floor(Math.random() * height);
-        const col = Math.floor(Math.random() * width);
+        const row = Math.floor(this.rng() * height);
+        const col = Math.floor(this.rng() * width);
         const tile = tileGrid[row]?.[col];
         if (!tile) continue;
 
@@ -161,8 +168,8 @@ export class MapGenerator {
       while (!placed && tries < width * height * 2) {
         tries++;
 
-        const row = Math.floor(Math.random() * height);
-        const col = Math.floor(Math.random() * width);
+        const row = Math.floor(this.rng() * height);
+        const col = Math.floor(this.rng() * width);
         const tile = tileGrid[row]?.[col];
         if (!tile) continue;
 
@@ -222,7 +229,7 @@ export class MapGenerator {
   private shuffleInPlace<T>(arr: T[]): void {
     // English comment: Fisher–Yates shuffle
     for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(this.rng() * (i + 1));
       const tmp = arr[i];
       arr[i] = arr[j]!;
       arr[j] = tmp!;

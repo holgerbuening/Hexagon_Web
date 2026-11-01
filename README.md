@@ -109,6 +109,14 @@ The AI is state-based and assigns roles dynamically:
 
 The goal is not perfect play, but **believable and readable tactical behavior**.
 
+### Testing and balancing the AI
+
+Random numbers in map generation, start units and combat come from an injectable generator (`src/core/rng.ts`), so games can be reproduced with a seed.
+
+- `npm test` runs the unit tests in `tests/`.
+- `npm run simulate -- --games 100 --seed 1` lets two AIs play against each other headlessly and prints win rates, average game length and AI time. Use `--a` and `--b` to give the two sides different income multipliers and `npm run simulate -- --help` for all options.
+- `npm run typecheck:tools` type-checks the tests and the simulation tool.
+
 ---
 
 ## Features

@@ -2,9 +2,16 @@ import type { Axial, CombatPreview, GameState, HexTile } from "../types";
 import { axialDistance } from "../hexMath";
 import { FieldType,getFieldDef } from "../map/fieldTypes";
 import type { Unit } from "../units/unit";
+import type { Rng } from "../rng";
 import { MovementSystem } from "./movementSystem";
 
 export class CombatSystem {
+  private readonly rng: Rng;
+
+  constructor(rng: Rng = Math.random) {
+    this.rng = rng;
+  }
+
   private getUnitAt(state: GameState, pos: Axial): Unit | undefined {
     // English comment: Small helper so GameCore does not need to provide getUnitAt callback
     for (const u of state.units) {
@@ -43,14 +50,14 @@ export class CombatSystem {
 
     const minAttacker = attackBase - attackBase * 0.25;
     const maxAttacker = attackBase + attackBase * 0.5;
-    const randomAttacker = Math.floor(Math.random() * 100);
+    const randomAttacker = Math.floor(this.rng() * 100);
     const attackPower = Math.floor(
       minAttacker + (maxAttacker - minAttacker) * (randomAttacker / 100.0)
     );
 
     const minDefender = defenseBase - defenseBase * 0.1;
     const maxDefender = defenseBase + defenseBase * 0.1;
-    const randomDefender = Math.floor(Math.random() * 100);
+    const randomDefender = Math.floor(this.rng() * 100);
     const defensePower = Math.floor(
       minDefender + (maxDefender - minDefender) * (randomDefender / 100.0)
     );
@@ -58,7 +65,7 @@ export class CombatSystem {
     const result = attackPower - defensePower;
 
     // English comment: Random damage bonus 1..5 (same as before)
-    const randomDamage = Math.floor(Math.random() * 5) + 1;
+    const randomDamage = Math.floor(this.rng() * 5) + 1;
 
     let damageDefender = 0;
     if (result < 5) {

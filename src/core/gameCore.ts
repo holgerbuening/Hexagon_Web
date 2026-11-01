@@ -18,19 +18,25 @@ import { AnimationSystem } from "./systems/animationSystem";
 import { MapGenerator } from "./map/mapGenerator";
 import { deserializeState, serializeState } from "./stateSerializer";
 import { AiSystem } from "./systems/aiSystem";
+import type { Rng } from "./rng";
 
 // Main game logic container (no rendering here)
 export class GameCore {
   private state: GameState;
   private tileGrid: HexTile[][]; // 2D array for easy access
-  private combatSystem: CombatSystem = new CombatSystem();
+  private combatSystem: CombatSystem;
   private movementSystem: MovementSystem = new MovementSystem();
   private animationSystem: AnimationSystem = new AnimationSystem();
-  private mapGenerator: MapGenerator = new MapGenerator();
-  private aiSystem: AiSystem = new AiSystem(this.movementSystem, this.combatSystem);
+  private mapGenerator: MapGenerator;
+  private aiSystem: AiSystem;
   private pendingPurchase: { unitType: UnitType; owner: PlayerId } | null = null;
+  private readonly rng: Rng;
   
-  constructor(width: number, height: number) {
+  constructor(width: number, height: number, rng: Rng = Math.random) {
+    this.rng = rng;
+    this.combatSystem = new CombatSystem(rng);
+    this.mapGenerator = new MapGenerator(rng);
+    this.aiSystem = new AiSystem(this.movementSystem, this.combatSystem);
     this.tileGrid = [];
     
     this.state = {
@@ -653,7 +659,7 @@ export class GameCore {
     // --- Helper: shuffle array in place
     const shuffleInPlace = <T,>(arr: T[]): void => {
       for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
+        const j = Math.floor(this.rng() * (i + 1));
         const tmp = arr[i]!;
         arr[i] = arr[j]!;
         arr[j] = tmp;
@@ -713,8 +719,8 @@ export class GameCore {
       mustConnectTo?: Axial
     ): { base: Axial; neighbors: HexTile[] } | null => {
       for (let attempts = 0; attempts < maxAttempts; attempts++) {
-        const row = Math.floor(Math.random() * height);
-        const col = Math.floor(Math.random() * (colMaxExclusive - colMinInclusive)) + colMinInclusive;
+        const row = Math.floor(this.rng() * height);
+        const col = Math.floor(this.rng() * (colMaxExclusive - colMinInclusive)) + colMinInclusive;
 
         const baseTile = this.getTileByColRow(col, row);
         if (!isLand(baseTile)) continue;

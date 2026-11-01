@@ -6,13 +6,18 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "esbuild tests/*.test.ts --bundle --platform=node --format=esm --out-extension:.js=.mjs --outdir=.sim-build/tests --log-level=error && node --test \".sim-build/tests/*.test.mjs\"",
+    "simulate": "esbuild tools/simulate.ts --bundle --platform=node --format=esm --outfile=.sim-build/simulate.mjs --log-level=error && node .sim-build/simulate.mjs",
+    "typecheck:tools": "tsc -p tools/tsconfig.json"
   },
   "keywords": [],
   "author": "",
   "license": "GPL-3.0-only",
   "description": "",
   "devDependencies": {
+    "@types/node": "^22.20.5",
+    "esbuild": "^0.27.2",
     "typescript": "^5.9.3",
     "vite": "^7.3.0"
   }
