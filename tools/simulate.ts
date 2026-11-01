@@ -11,6 +11,8 @@ Usage: npm run simulate -- [options]
   --max-turns <n>   turn limit per game, counted per player move (default 300)
   --a <x>           income multiplier of side A (default 1)
   --b <x>           income multiplier of side B (default 1)
+  --basic-a         side A buys with the basic fixed list instead of smart purchasing
+  --basic-b         side B buys with the basic fixed list instead of smart purchasing
   --verbose         print every game
   --help            show this text
 
@@ -22,7 +24,7 @@ function readOptions(argv: string[]): Map<string, string> {
     const arg = argv[i]!;
     if (!arg.startsWith("--")) throw new Error(`Unexpected argument: ${arg}`);
     const name = arg.slice(2);
-    if (name === "verbose" || name === "help") {
+    if (name === "verbose" || name === "help" || name === "basic-a" || name === "basic-b") {
       options.set(name, "true");
       continue;
     }
@@ -59,6 +61,8 @@ function main(): void {
     maxTurns: numberOption(options, "max-turns", 300),
     multiplierA: numberOption(options, "a", 1),
     multiplierB: numberOption(options, "b", 1),
+    smartPurchaseA: !options.has("basic-a"),
+    smartPurchaseB: !options.has("basic-b"),
   };
 
   const verbose = options.has("verbose");
@@ -70,7 +74,7 @@ function main(): void {
 
   const percent = (count: number) => ((count / result.games) * 100).toFixed(1);
   console.log(
-    `Games: ${result.games} (seed ${config.seed}, ${config.width}x${config.height}, income A x${config.multiplierA} / B x${config.multiplierB})`
+    `Games: ${result.games} (seed ${config.seed}, ${config.width}x${config.height}, income A x${config.multiplierA} / B x${config.multiplierB}, purchasing A ${config.smartPurchaseA ? "smart" : "basic"} / B ${config.smartPurchaseB ? "smart" : "basic"})`
   );
   console.log(`A wins: ${result.winsA} (${percent(result.winsA)}%)`);
   console.log(`B wins: ${result.winsB} (${percent(result.winsB)}%)`);

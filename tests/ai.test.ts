@@ -63,7 +63,10 @@ describe("combat estimate", () => {
 
 describe("AI turn", () => {
   // Flat open field with both headquarters in the far corners and no money to buy units.
-  function createScenario(units: (place: (col: number, row: number) => { q: number; r: number }) => Unit[]) {
+  function createScenario(
+    units: (place: (col: number, row: number) => { q: number; r: number }) => Unit[],
+    balance = 0
+  ) {
     const rng = createSeededRng(7);
     const game = new GameCore(10, 10, rng);
     game.configureAi(null);
@@ -83,7 +86,7 @@ describe("AI turn", () => {
       new Unit(UnitType.MilitaryBase, hq1.q, hq1.r, 1),
       ...units(place),
     ];
-    state.playerBalances = [0, 0];
+    state.playerBalances = [0, balance];
     state.currentPlayer = 1;
     const ai = new AiSystem(new MovementSystem(), new CombatSystem(rng));
     ai.configure(1, 1);
@@ -160,6 +163,53 @@ describe("AI turn", () => {
       (entry) => entry.preview.defenderPos.q === victim.q && entry.preview.defenderPos.r === victim.r
     );
     assert.equal(onVictim.length, 1, "one attack is enough for a nearly dead unit");
+  });
+
+  const ownUnits = (state: GameState, ...types: UnitType[]) =>
+    state.units.filter((unit) => unit.owner === 1 && types.includes(unit.type));
+
+  it("buys several units in one turn but no engineer with a small army", () => {
+    const { game, state, ai } = createScenario((place) => {
+      const far = place(9, 0);
+      return [new Unit(UnitType.Infantry, far.q, far.r, 0)];
+    }, 1000);
+
+    runAiTurn(game, ai);
+
+    const bought = ownUnits(state, UnitType.Infantry, UnitType.MachnineGun, UnitType.Artillery, UnitType.Cavalry, UnitType.Tank);
+    assert.ok(bought.length >= 2, "should spend the money on more than one unit");
+    assert.equal(ownUnits(state, UnitType.Engineer).length, 0);
+  });
+
+  describe("saving up", () => {
+    const build = (enemyCol: number, enemyRow: number) => {
+      let city!: { q: number; r: number };
+      const scenario = createScenario((place) => {
+        city = place(1, 8);
+        const enemy = place(enemyCol, enemyRow);
+        return [
+          new Unit(UnitType.Infantry, city.q, city.r, 1),
+          new Unit(UnitType.Tank, enemy.q, enemy.r, 0),
+        ];
+      }, 300);
+      // The infantry holds a city, which adds income for the next turns.
+      scenario.game.getTile(city)!.field = FieldType.City;
+      return scenario;
+    };
+
+    it("waits for a clearly better unit that is only a few turns away", () => {
+      const { game, state, ai } = build(9, 0);
+      runAiTurn(game, ai);
+      assert.equal(ownUnits(state, UnitType.Infantry, UnitType.MachnineGun, UnitType.Artillery,
+        UnitType.Cavalry, UnitType.Tank).length, 1);
+      assert.equal(state.playerBalances[1], 300);
+    });
+
+    it("buys what it can afford when the headquarter is threatened", () => {
+      const { game, state, ai } = build(3, 8);
+      runAiTurn(game, ai);
+      assert.ok(state.playerBalances[1]! < 300);
+    });
   });
 });
 

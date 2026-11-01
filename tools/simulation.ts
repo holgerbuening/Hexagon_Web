@@ -47,6 +47,8 @@ export interface GameConfig {
   maxTurns: number;
   /** AI income multiplier per player. */
   incomeMultiplier: [number, number];
+  /** Smart purchasing per player; defaults to on for both. */
+  smartPurchase?: [boolean, boolean];
 }
 
 export interface GameResult {
@@ -77,6 +79,7 @@ export function playGame(config: GameConfig): GameResult {
   const ais = [0, 1].map((player) => {
     const ai = new AiSystem(movementSystem, combatSystem);
     ai.configure(player as PlayerId, config.incomeMultiplier[player]);
+    ai.setSmartPurchase(config.smartPurchase?.[player] ?? true);
     return ai;
   });
 
@@ -117,6 +120,9 @@ export interface BatchConfig {
   /** Income multiplier of side A and side B. */
   multiplierA: number;
   multiplierB: number;
+  /** Side A and side B use the smart purchasing (default) or the basic fixed list. */
+  smartPurchaseA?: boolean;
+  smartPurchaseB?: boolean;
 }
 
 export interface BatchResult {
@@ -152,6 +158,9 @@ export function runBatch(
       incomeMultiplier: aIsPlayer0
         ? [config.multiplierA, config.multiplierB]
         : [config.multiplierB, config.multiplierA],
+      smartPurchase: aIsPlayer0
+        ? [config.smartPurchaseA ?? true, config.smartPurchaseB ?? true]
+        : [config.smartPurchaseB ?? true, config.smartPurchaseA ?? true],
     });
 
     if (result.winner === null) {

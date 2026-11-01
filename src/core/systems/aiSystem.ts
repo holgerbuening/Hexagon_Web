@@ -36,10 +36,30 @@ export const aiDifficultyMultipliers: Record<AiDifficulty, number> = {
 
 export class AiSystem {
   private static readonly ENGINEER_ROAD_COST = 20;
+  private static readonly COMBAT_UNIT_TYPES: UnitType[] = [
+    UnitType.Infantry,
+    UnitType.MachnineGun,
+    UnitType.Artillery,
+    UnitType.Cavalry,
+    UnitType.Tank,
+  ];
+  private static readonly COMBAT_UNITS_PER_MEDIC = 6;
+  // Each unit of a type already owned lowers its appeal, so armies stay mixed.
+  private static readonly OWN_TYPE_PENALTY = 0.15;
+  // Enemies this close to a headquarter stop the AI from saving money.
+  private static readonly HQ_DANGER_DISTANCE = 6;
+  private static readonly SAVING_HORIZON_TURNS = 3;
+  private static readonly SAVING_SCORE_MARGIN = 0.1;
+  // Roads are a luxury: an engineer is only bought with a decent army and money left over.
+  private static readonly ENGINEER_MIN_ARMY = 6;
+  private static readonly ENGINEER_RESERVE = 300;
+  // Units below this share of their maximum HP leave the fight.
+  private static readonly RETREAT_HP_RATIO = 0.3;
   private movementSystem: MovementSystem;
   private combatSystem: CombatSystem;
   private aiPlayer: PlayerId | null = 1;
   private aiDifficultyMultiplier: number = 1.0;
+  private smartPurchase = true;
   // Expected damage already assigned to enemy units in the current AI turn (focus fire, no overkill).
   private plannedDamage = new Map<Unit, number>();
   // Path cost to a target tile, cached per target because costs do not depend on the unit.
@@ -69,6 +89,11 @@ export class AiSystem {
 
   public setDifficultyMultiplier(multiplier: number): void {
     this.aiDifficultyMultiplier = Math.max(1, multiplier);
+  }
+
+  /** Smart purchasing counters the enemy army and saves up; the basic one follows a fixed list. */
+  public setSmartPurchase(enabled: boolean): void {
+    this.smartPurchase = enabled;
   }
 
   public runTurn(
@@ -135,7 +160,7 @@ export class AiSystem {
         continue;
       }
 
-      if (unit.hp < 15 && this.tryRetreat(state, unit, getNeighbors)) continue;
+      if (unit.hp < unit.maxHP * AiSystem.RETREAT_HP_RATIO && this.tryRetreat(state, unit, getNeighbors)) continue;
 
       const preview = this.tryAttack(state, unit, getTile, getNeighbors);
       if (preview) {
@@ -150,6 +175,131 @@ export class AiSystem {
   }
 
   private purchaseUnits(
+    state: GameState,
+    getNeighbors: GetNeighbors,
+    getUnitAt: GetUnitAt,
+    canAfford: CanAfford,
+    spend: Spend
+  ): void {
+    if (this.aiPlayer === null || state.currentPlayer !== this.aiPlayer) return;
+    if (this.smartPurchase) {
+      this.purchaseUnitsSmart(state, getNeighbors, getUnitAt, canAfford, spend);
+    } else {
+      this.purchaseUnitsBasic(state, getNeighbors, getUnitAt, canAfford, spend);
+    }
+  }
+
+  private purchaseUnitsSmart(
+    state: GameState,
+    getNeighbors: GetNeighbors,
+    getUnitAt: GetUnitAt,
+    canAfford: CanAfford,
+    spend: Spend
+  ): void {
+    const owner = state.currentPlayer;
+    const headquarters = state.units.filter((unit) => unit.owner === owner && unit.type === UnitType.MilitaryBase);
+    const income = this.estimateIncome(state, owner);
+    const threatened = headquarters.some((hq) => state.units.some((enemy) =>
+      enemy.owner !== owner && enemy.type !== UnitType.MilitaryBase &&
+      axialDistance(enemy, hq) <= AiSystem.HQ_DANGER_DISTANCE));
+
+    for (const hq of headquarters) {
+      // Every iteration either buys a unit or leaves the loop, so this ends.
+      while (true) {
+        const unitType = this.chooseUnitToBuy(state, owner, canAfford, income, threatened);
+        // Saving up or nothing affordable: no HQ buys anything else this turn.
+        if (!unitType) return;
+
+        const spawnTile = this.findSpawnTileNear(hq.q, hq.r, getNeighbors, getUnitAt, unitType === UnitType.Engineer);
+        if (!spawnTile) break;
+        if (!spend(owner, UNIT_TYPES[unitType].price)) return;
+
+        const unit = new Unit(unitType, spawnTile.q, spawnTile.r, owner);
+        if (unit.type === UnitType.Engineer) {
+          unit.roadBuildPath = this.planEngineerRoadPath(state, unit, getNeighbors);
+        }
+        state.units.push(unit);
+      }
+    }
+  }
+
+  /** Returns the unit to buy next, or null to stop buying (saving up or nothing affordable). */
+  private chooseUnitToBuy(
+    state: GameState,
+    owner: PlayerId,
+    canAfford: CanAfford,
+    income: number,
+    threatened: boolean
+  ): UnitType | null {
+    const own = state.units.filter((unit) => unit.owner === owner);
+    const countOf = (type: UnitType): number => own.filter((unit) => unit.type === type).length;
+    const combatCount = own.filter((unit) => AiSystem.COMBAT_UNIT_TYPES.includes(unit.type)).length;
+
+    if (combatCount >= AiSystem.ENGINEER_MIN_ARMY && countOf(UnitType.Engineer) === 0 &&
+        canAfford(owner, UNIT_TYPES[UnitType.Engineer].price + AiSystem.ENGINEER_RESERVE)) {
+      return UnitType.Engineer;
+    }
+    const wantedMedics = Math.floor(combatCount / AiSystem.COMBAT_UNITS_PER_MEDIC);
+    if (countOf(UnitType.Medic) < wantedMedics && canAfford(owner, UNIT_TYPES[UnitType.Medic].price)) {
+      return UnitType.Medic;
+    }
+
+    const enemies = state.units.filter((unit) => unit.owner !== owner && unit.type !== UnitType.MilitaryBase);
+    const freeHoldings = state.tiles.filter((tile) =>
+      this.isCityOrIndustry(tile) && !this.getUnitAt(state, tile)).length;
+
+    const ranked = AiSystem.COMBAT_UNIT_TYPES.map((type) => {
+      let score = this.matchupEfficiency(type, enemies, owner) / (1 + AiSystem.OWN_TYPE_PENALTY * countOf(type));
+      // Fast units capture free cities and industry first.
+      if (type === UnitType.Cavalry && countOf(UnitType.Cavalry) < freeHoldings) score += 0.5;
+      return { type, score, price: UNIT_TYPES[type].price };
+    }).sort((left, right) => right.score - left.score);
+
+    const best = ranked[0]!;
+    if (canAfford(owner, best.price)) return best.type;
+
+    const bestAffordable = ranked.find((option) => canAfford(owner, option.price));
+    if (!bestAffordable) return null;
+
+    // Save for a clearly better unit that is only a few turns away, unless the headquarter is in danger.
+    const worthWaiting = best.score - bestAffordable.score > AiSystem.SAVING_SCORE_MARGIN;
+    if (!threatened && worthWaiting &&
+        canAfford(owner, best.price - income * AiSystem.SAVING_HORIZON_TURNS)) {
+      return null;
+    }
+    return bestAffordable.type;
+  }
+
+  /** Average value gained per money spent when a unit type fights the given enemies. */
+  private matchupEfficiency(type: UnitType, enemies: Unit[], owner: PlayerId): number {
+    const prototype = new Unit(type, 0, 0, owner);
+    const price = prototype.data.price;
+    const targets = enemies.length > 0 ? enemies : [new Unit(UnitType.Infantry, 0, 0, owner === 0 ? 1 : 0)];
+
+    let total = 0;
+    for (const enemy of targets) {
+      const attack = this.combatSystem.estimateOutcome(prototype, enemy, FieldType.Farmland, prototype.attackRange);
+      const defense = this.combatSystem.estimateOutcome(enemy, prototype, FieldType.Farmland, enemy.attackRange);
+      const gain = (Math.min(attack.damageDefender, enemy.hp) / 100) * this.unitValue(enemy);
+      // Being attacked is less certain than attacking, hence the factor.
+      const loss = ((attack.damageAttacker + defense.damageDefender * 0.5) / 100) * price;
+      total += gain - loss;
+    }
+    return total / targets.length / price;
+  }
+
+  private estimateIncome(state: GameState, owner: PlayerId): number {
+    let income = 10;
+    for (const unit of state.units) {
+      if (unit.owner !== owner) continue;
+      const tile = this.getTile(state, unit);
+      if (tile?.field === FieldType.City) income += 50;
+      else if (tile?.field === FieldType.Industry) income += 40;
+    }
+    return income * this.getIncomeMultiplier(owner);
+  }
+
+  private purchaseUnitsBasic(
     state: GameState,
     getNeighbors: GetNeighbors,
     getUnitAt: GetUnitAt,
@@ -554,7 +704,7 @@ export class AiSystem {
   private canRelieveGarrison(unit: Unit): boolean {
     return unit.type !== UnitType.MilitaryBase &&
       unit.type !== UnitType.Engineer && unit.type !== UnitType.Medic &&
-      !unit.acted && unit.remainingMovement > 0 && unit.hp >= 15;
+      !unit.acted && unit.remainingMovement > 0 && unit.hp >= unit.maxHP * AiSystem.RETREAT_HP_RATIO;
   }
 
   private findAdvancePath(
