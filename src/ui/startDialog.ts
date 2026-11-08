@@ -1,5 +1,6 @@
 type StartDialogOptions = {
   onStartNew: () => void;
+  onOpenEditor: () => void;
   onResume: () => void;
   onSave: () => void;
   onLoad: () => void;
@@ -84,7 +85,16 @@ export function showStartDialog(appRoot: HTMLElement, options: StartDialogOption
     options.onLoad();
   });
 
-  dialog.append(title, resumeButton, startButton, settingsButton, aboutButton, saveButton, loadButton);
+  const editorButton = document.createElement("button");
+  editorButton.className = "start-dialog-button";
+  editorButton.type = "button";
+  editorButton.textContent = "Map Editor";
+  editorButton.addEventListener("click", () => {
+    overlay.remove();
+    options.onOpenEditor();
+  });
+
+  dialog.append(title, editorButton, resumeButton, startButton, settingsButton, aboutButton, saveButton, loadButton);
   overlay.appendChild(dialog);
   appRoot.appendChild(overlay);
 }

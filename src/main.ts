@@ -1,3 +1,5 @@
+import { MapEditor } from "./core/map/mapEditor";
+import { type MapDocument, serializeMapDocument } from "./core/map/mapSerializer";
 import { GameCore } from "./core/gameCore";
 import { pixelToAxial } from "./core/hexMath";
 import type { CombatPreview, CombatPreviewEntry, PlayerId, SelectHexResult} from "./core/types";
@@ -17,11 +19,13 @@ import { OnlineSession, RelayRequestError, type CloseReason } from "./net/online
 import { buildInviteLink, getRelayUrl, parseInviteRoom } from "./net/relayUrl";
 import { isPlausibleGameState } from "./net/stateGuard";
 import type { SavedGameState } from "./core/types";
-import { describeSeat, showGameModeDialog, showInviteDialog, showNoticeDialog, type InviteDialogHandle } from "./ui/onlineDialog";
+import { showDiscardMapDialog, describeSeat, showGameModeDialog, showInviteDialog, showNoticeDialog, type InviteDialogHandle } from "./ui/onlineDialog";
 
 const BASE_HEX_SIZE = 64;
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const renderer = new CanvasRenderer(canvas, BASE_HEX_SIZE);
+let mapEditor: MapEditor | null = null;
+let editorToolbar: HTMLElement | null = null;
 const game = new GameCore(20,20); // 20x20 map
 renderer.setInvalidateHandler(renderAll);
 const AI_PLAYER_ID: PlayerId = 1;
@@ -113,7 +117,7 @@ if (hudSettings) {
 // End turn button
 if (hudEndTurn) {
   hudEndTurn.addEventListener("click", () => {
-    if (isInputBlocked() || isOpponentsTurn()) {
+    if (mapEditor || isInputBlocked() || isOpponentsTurn()) {
       return;
     }
     const aiPreviews = game.endTurn();
@@ -141,7 +145,7 @@ let touchStartedInCanvas = false;
 
 // If mouse moved more than this, treat as drag
 const DRAG_THRESHOLD_PX = 3;
-const isInputBlocked = (): boolean => game.hasActiveUnitAnimations();
+const isInputBlocked = (): boolean => !!document.querySelector(".dialog-overlay") || (!mapEditor && game.hasActiveUnitAnimations());
 
 // --- Keyboard control state ---
 let panLeft = false;
@@ -235,7 +239,12 @@ canvas.addEventListener("mouseup", function (ev) {
   const world = renderer.screenToWorld(sx, sy);
   const hex = pixelToAxial(world.x, world.y, renderer.getHexSize());
 
-  if (isOpponentsTurn()) {
+  if (!mapEditor && isOpponentsTurn()) {
+    return;
+  }
+  if (mapEditor) {
+    mapEditor.cycle(hex);
+    renderAll();
     return;
   }
   const res = game.selectHex(hex);
@@ -376,7 +385,12 @@ canvas.addEventListener("touchend", function (ev) {
     const point = getTouchPoint(touch);
     const world = renderer.screenToWorld(point.x, point.y);
     const hex = pixelToAxial(world.x, world.y, renderer.getHexSize());
-    if (isOpponentsTurn()) {
+    if (!mapEditor && isOpponentsTurn()) {
+      return;
+    }
+    if (mapEditor) {
+      mapEditor.cycle(hex);
+      renderAll();
       return;
     }
     const res = game.selectHex(hex);
@@ -434,7 +448,8 @@ canvas.addEventListener("wheel", function (ev) {
 
 
 function updateHud(): void {
-  const state = game.getState();
+  const gameState = game.getState();
+  const state = mapEditor ? { ...gameState, selectedHex: null, selectedUnit: null } : gameState;
 
   hudTurn.textContent = String(state.turn);
   hudPlayer.textContent = online
@@ -480,8 +495,21 @@ function updateHud(): void {
 }
 
 function renderAll(): void {
-  renderer.render(game.getState());
+  const state = game.getState();
+  renderer.render(mapEditor ? { ...state, tiles: mapEditor.document.tiles,
+    mapWidth: mapEditor.document.width, mapHeight: mapEditor.document.height,
+    units: [], selectedHex: null, selectedUnit: null,
+    reachableTiles: {}, attackOverlay: {}, combatOverlay: {} } : state);
   updateHud();
+  if (mapEditor) {
+    hudPlayer.textContent = "Map Editor";
+    hudTurn.textContent = "–";
+    hudBalance.textContent = "–";
+    hudSelected.textContent = `${mapEditor.document.width} × ${mapEditor.document.height}`;
+    if (hudEndTurn) hudEndTurn.disabled = true;
+    const undo = editorToolbar?.querySelector<HTMLButtonElement>("[data-undo]");
+    if (undo) undo.disabled = !mapEditor.canUndo;
+  }
 }
 
 function resizeCanvasToDisplaySize(canvas: HTMLCanvasElement): boolean {
@@ -511,17 +539,24 @@ window.addEventListener("keydown", function (ev) {
     return;
   }
 
+  if (mapEditor && (ev.ctrlKey || ev.metaKey) && ev.code === "KeyZ") {
+    ev.preventDefault();
+    mapEditor.undo();
+    renderAll();
+    return;
+  }
   // Existing: Space ends turn
   if (ev.code === "Space" || ev.code === " " || ev.code === "Escape" || ev.code === "KeyP") {
     ev.preventDefault();
-    openStartDialog();
+    if (mapEditor) closeMapEditor();
+    else openStartDialog();
     return;
   }
 
   // Reset view
   if (ev.code === "Digit0" || ev.code === "Numpad0") {
     renderer.resetView();
-    const centerTile = game.tryGetMapCenterTile();
+    const centerTile = mapEditor ? mapEditor.document.tiles.find(t => t.col === Math.floor(mapEditor!.document.width / 2) && t.row === Math.floor(mapEditor!.document.height / 2)) : game.tryGetMapCenterTile();
     if (centerTile) {
       renderer.centerOnAxial(centerTile.q, centerTile.r);
     }
@@ -588,15 +623,15 @@ function animationLoop(timeMs: number): void {
   lastFrameTimeMs = timeMs;
 
   let didChange = false;
-  const didFocusAiMovement = focusOnAiMoveStart();
+  const didFocusAiMovement = !mapEditor && focusOnAiMoveStart();
   if (didFocusAiMovement) {
     didChange = true;
   }
-  const didAnimateUnits = game.advanceUnitAnimations(dt);
+  const didAnimateUnits = !mapEditor && game.advanceUnitAnimations(dt);
   if (didAnimateUnits) {
     didChange = true;
   }
-  movementAudio.update(game.getState().units);
+  movementAudio.update(mapEditor ? [] : game.getState().units);
 
   // Pan movement
   let dx = 0;
@@ -819,12 +854,14 @@ function headquarterDialog(result: SelectHexResult ): void {
 }
 
 function openStartDialog(): void {
+  if (mapEditor) { closeMapEditor(); return; }
   if (!appRoot) {
     return;
   }
   exitFullscreen();
 
   showStartDialog(appRoot, {
+    onOpenEditor: openMapEditor,
     resumeEnabled: !game.getState().gameOver,
     onResume: () => {
       applyFullscreenPreference();
@@ -908,15 +945,16 @@ if (hudOnline) {
   });
 }
 
-function startFreshGame(): void {
+function prepareFreshGame(map?: MapDocument): SavedGameState {
   // Some generated maps have no room for the start units.
   for (let attempt = 1; ; attempt++) {
     try {
-      game.startNewGame();
-      return;
+      return game.prepareNewGame(map);
     } catch (error) {
       if (attempt >= 10) {
-        throw error;
+        throw new Error(map
+          ? "This map needs space for a base and three adjacent land units on each side, connected by land. Please edit the map and try again."
+          : "Could not generate a playable map. Please try again.");
       }
     }
   }
@@ -935,14 +973,20 @@ function openGameModeDialog(): void {
     return;
   }
   showGameModeDialog(appRoot, {
-    onSinglePlayer: () => {
+    onSinglePlayer: (map) => {
+      const state = prepareFreshGame(map);
       leaveOnline();
-      startFreshGame();
+      game.loadState(state);
+      showFreshMap();
       applyFullscreenPreference();
       renderAll();
     },
-    onOnline: () => {
-      void startOnlineHost();
+    onOnline: (map) => {
+      if (map && (map.width > 100 || map.height > 100)) {
+        throw new Error("Online maps support a maximum size of 100 × 100.");
+      }
+      const state = prepareFreshGame(map);
+      void startOnlineHost(state);
     },
     onBack: () => {
       openStartDialog();
@@ -1041,7 +1085,7 @@ function showConnectingDialog(text: string): { close: () => void } | null {
   });
 }
 
-async function startOnlineHost(): Promise<void> {
+async function startOnlineHost(initialState: SavedGameState): Promise<void> {
   if (!appRoot) {
     return;
   }
@@ -1103,7 +1147,7 @@ async function startOnlineHost(): Promise<void> {
     inviteDialog: null,
   };
   applyAiConfiguration();
-  startFreshGame();
+  game.loadState(initialState);
   showFreshMap();
   applyFullscreenPreference();
   renderAll();
@@ -1286,3 +1330,124 @@ function applyFullscreenPreference(): void {
 
 // Start loop
 requestAnimationFrame(animationLoop);
+
+function centerEditorMap(): void {
+  if (!mapEditor) return;
+  const { width, height, tiles } = mapEditor.document;
+  const center = tiles.find(t => t.col === Math.floor(width / 2) && t.row === Math.floor(height / 2));
+  renderer.resetView();
+  if (center) renderer.centerOnAxial(center.q, center.r);
+}
+
+function confirmDiscardMap(onDiscard: () => void): void {
+  if (!mapEditor?.dirty) {
+    onDiscard();
+    return;
+  }
+  if (appRoot && !document.querySelector(".dialog-overlay")) {
+    showDiscardMapDialog(appRoot, onDiscard);
+  }
+}
+
+function closeMapEditor(): void {
+  confirmDiscardMap(() => {
+    mapEditor = null;
+    editorToolbar?.remove();
+    editorToolbar = null;
+    renderer.resetView();
+    const center = game.tryGetMapCenterTile();
+    if (center) renderer.centerOnAxial(center.q, center.r);
+    renderAll();
+    openStartDialog();
+  });
+}
+
+function openMapEditor(): void {
+  mapEditor = new MapEditor();
+  const toolbar = document.createElement("section");
+  toolbar.className = "uiPanel map-editor-toolbar";
+  toolbar.style.backgroundImage = 'url("/images/background/startbackground.png")';
+  toolbar.setAttribute("aria-label", "Map Editor");
+  const title = document.createElement("strong");
+  title.textContent = "Map Editor";
+  const name = document.createElement("input");
+  name.className = "start-dialog-input";
+  name.value = mapEditor.document.name;
+  name.setAttribute("aria-label", "Kartenname");
+  name.maxLength = 120;
+  name.addEventListener("input", () => {
+    if (!mapEditor) return;
+    mapEditor.document.name = name.value;
+    mapEditor.dirty = true;
+  });
+  // Typing in the name must not pan the map or activate keyboard shortcuts.
+  name.addEventListener("keydown", ev => ev.stopPropagation());
+  toolbar.append(title, name);
+  const button = (label: string, action: () => void): HTMLButtonElement => {
+    const element = document.createElement("button");
+    element.type = "button";
+    element.className = "start-dialog-button";
+    element.textContent = label;
+    element.addEventListener("click", action);
+    toolbar.append(element);
+    return element;
+  };
+  button("Neu generieren", () => {
+    confirmDiscardMap(() => {
+      mapEditor = new MapEditor();
+      name.value = mapEditor.document.name;
+      centerEditorMap();
+      renderAll();
+    });
+  });
+  button("Rückgängig", () => { mapEditor?.undo(); renderAll(); }).dataset.undo = "";
+  button("Karte speichern", () => {
+    if (!mapEditor) return;
+    const blob = new Blob([serializeMapDocument(mapEditor.document)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `hexagon-map-${Date.now()}.json`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    mapEditor.dirty = false;
+  });
+  button("Karte laden", () => {
+    const targetEditor = mapEditor;
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json,application/json";
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      void file.text().then(text => {
+        if (!targetEditor || mapEditor !== targetEditor) return;
+        const candidate = new MapEditor();
+        candidate.load(JSON.parse(text));
+        confirmDiscardMap(() => {
+          mapEditor = candidate;
+          name.value = candidate.document.name;
+          centerEditorMap();
+          renderAll();
+        });
+      }).catch(() => window.alert("Karte konnte nicht geladen werden. Bitte eine gültige Hexagon-Kartendatei auswählen."));
+    });
+    input.click();
+  });
+  button("Zurück zum Menü", closeMapEditor);
+  const help = document.createElement("small");
+  help.textContent = "Klick: Ackerland → Wald → Hügel → Gebirge → Wasser → Stadt → Industrie · Ziehen: Verschieben · Strg+Z: Rückgängig";
+  toolbar.append(help);
+  editorToolbar = toolbar;
+  appRoot?.append(toolbar);
+  centerEditorMap();
+  renderAll();
+}
+
+window.addEventListener("beforeunload", event => {
+  if (!mapEditor?.dirty) return;
+  event.preventDefault();
+  event.returnValue = "";
+});

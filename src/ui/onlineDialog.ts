@@ -1,3 +1,4 @@
+import { parseMapDocument, type MapDocument } from "../core/map/mapSerializer";
 import { PLAYER_NAMES, type PlayerId } from "../core/types";
 
 const BACKGROUND = 'url("/images/background/startbackground.png")';
@@ -37,23 +38,63 @@ function createText(text: string): HTMLParagraphElement {
 }
 
 type GameModeOptions = {
-  onSinglePlayer: () => void;
-  onOnline: () => void;
+  onSinglePlayer: (map?: MapDocument) => void;
+  onOnline: (map?: MapDocument) => void;
   onBack: () => void;
 };
 
 /** Asks whether to play against the AI or against another person online. */
 export function showGameModeDialog(appRoot: HTMLElement, options: GameModeOptions): void {
   const { overlay, dialog } = createDialog(appRoot, "New Game");
-  const choose = (action: () => void) => () => {
-    overlay.remove();
-    action();
+  dialog.classList.add("new-game-dialog");
+  let selectedMap: MapDocument | undefined;
+  const mapLabel = createText("Map: Random map (20 × 20)");
+  mapLabel.setAttribute("aria-live", "polite");
+  const error = createText("");
+  error.setAttribute("role", "alert");
+  const chooseFile = createButton("Load Map…", () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json,application/json";
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      single.disabled = online.disabled = chooseFile.disabled = random.disabled = true;
+      void file.text().then(text => {
+        const map = parseMapDocument(JSON.parse(text));
+        if (!overlay.isConnected) return;
+        selectedMap = map;
+        mapLabel.textContent = `Map: ${map.name || file.name} (${map.width} × ${map.height})`;
+        error.textContent = "";
+      }).catch(() => {
+        if (overlay.isConnected) error.textContent = "Could not load this map. Please select a valid Hexagon map file.";
+      }).finally(() => { single.disabled = online.disabled = chooseFile.disabled = random.disabled = false; });
+    });
+    input.click();
+  });
+  const choose = (action: (map?: MapDocument) => void) => () => {
+    try {
+      action(selectedMap);
+      overlay.remove();
+    } catch (reason) {
+      error.textContent = reason instanceof Error ? reason.message : "Could not start this game.";
+    }
   };
-
+  const single = createButton("1 Player vs AI", choose(options.onSinglePlayer));
+  const online = createButton("2 Players Online", choose(options.onOnline));
+  const random = createButton("Random Map", () => {
+    selectedMap = undefined;
+    mapLabel.textContent = "Map: Random map (20 × 20)";
+    error.textContent = "";
+  });
   dialog.append(
-    createButton("1 Player vs AI", choose(options.onSinglePlayer)),
-    createButton("2 Players Online", choose(options.onOnline)),
-    createButton("Back", choose(options.onBack))
+    mapLabel,
+    random,
+    chooseFile,
+    error,
+    single,
+    online,
+    createButton("Back", () => { overlay.remove(); options.onBack(); })
   );
 }
 
@@ -130,4 +171,39 @@ export function showNoticeDialog(appRoot: HTMLElement, options: NoticeOptions): 
 
 export function describeSeat(player: PlayerId, myPlayer: PlayerId): string {
   return player === myPlayer ? `${PLAYER_NAMES[player]} (you)` : `${PLAYER_NAMES[player]} (opponent)`;
+}
+
+/** Confirms discarding unsaved map edits using the shared menu appearance. */
+export function showDiscardMapDialog(appRoot: HTMLElement, onDiscard: () => void): void {
+  const previousFocus = document.activeElement;
+  const { overlay, dialog } = createDialog(appRoot, "Discard unsaved changes?");
+  const title = dialog.querySelector("h1")!;
+  title.id = "discard-map-title";
+  dialog.setAttribute("role", "alertdialog");
+  dialog.setAttribute("aria-modal", "true");
+  dialog.setAttribute("aria-labelledby", title.id);
+  const text = createText("Your map has unsaved changes. Discard them and continue?");
+  text.id = "discard-map-description";
+  dialog.setAttribute("aria-describedby", text.id);
+  const close = () => {
+    overlay.remove();
+    if (previousFocus instanceof HTMLElement) previousFocus.focus();
+  };
+  const cancel = createButton("Keep Editing", close);
+  const discard = createButton("Discard Changes", () => {
+    close();
+    onDiscard();
+  });
+  dialog.append(text, cancel, discard);
+  overlay.addEventListener("keydown", event => {
+    event.stopPropagation();
+    if (event.key === "Escape") {
+      event.preventDefault();
+      close();
+    } else if (event.key === "Tab") {
+      event.preventDefault();
+      (document.activeElement === cancel ? discard : cancel).focus();
+    }
+  });
+  cancel.focus();
 }

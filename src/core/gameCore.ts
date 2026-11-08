@@ -1,3 +1,4 @@
+import { parseMapDocument, type MapDocument } from "./map/mapSerializer";
 import {
   type Axial,
   type GameState,
@@ -539,7 +540,23 @@ export class GameCore {
     this.state.combatOverlay = {};
   }
 
-  public startNewGame(): void {
+  /** Builds a fresh game without changing the running match, even if placement fails. */
+  public prepareNewGame(map?: MapDocument): SavedGameState {
+    const previousState = this.state;
+    const previousGrid = this.tileGrid;
+    const previousPurchase = this.pendingPurchase;
+    this.state = { ...previousState };
+    try {
+      this.startNewGame(map);
+      return this.serializeState();
+    } finally {
+      this.state = previousState;
+      this.tileGrid = previousGrid;
+      this.pendingPurchase = previousPurchase;
+    }
+  }
+
+  public startNewGame(map?: MapDocument): void {
     
     this.state.playerBalances = [50, 50];
     this.state.turn = 1;
@@ -554,7 +571,16 @@ export class GameCore {
     this.state.combatOverlay = {};
     this.state.units = [];
     this.state.tiles = [];
-    this.createNewMap(this.state.mapWidth, this.state.mapHeight);
+    if (map) {
+      const document = parseMapDocument(map);
+      this.state.mapWidth = document.width;
+      this.state.mapHeight = document.height;
+      this.state.tiles = document.tiles;
+      this.tileGrid = Array.from({ length: document.height }, () => []);
+      for (const tile of document.tiles) this.tileGrid[tile.row]![tile.col] = tile;
+    } else {
+      this.createNewMap(20, 20);
+    }
     this.setStartUnits();
   }
 
@@ -661,8 +687,6 @@ export class GameCore {
     const width = this.state.mapWidth;
     const height = this.state.mapHeight;
 
-    const maxAttempts = width * height;
-
     const leftMaxColExclusive = Math.floor(width / 3);
     const rightMinColInclusive = Math.floor((width * 2) / 3);
 
@@ -728,11 +752,9 @@ export class GameCore {
       colMaxExclusive: number,
       mustConnectTo?: Axial
     ): { base: Axial; neighbors: HexTile[] } | null => {
-      for (let attempts = 0; attempts < maxAttempts; attempts++) {
-        const row = Math.floor(this.rng() * height);
-        const col = Math.floor(this.rng() * (colMaxExclusive - colMinInclusive)) + colMinInclusive;
-
-        const baseTile = this.getTileByColRow(col, row);
+      const candidates = this.state.tiles.filter(tile => tile.col >= colMinInclusive && tile.col < colMaxExclusive);
+      shuffleInPlace(candidates);
+      for (const baseTile of candidates) {
         if (!isLand(baseTile)) continue;
 
         // Avoid overlap

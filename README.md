@@ -221,3 +221,28 @@ Hexagon is a hobby and learning project focusing on:
 - Porting from desktop (C++/Qt) to web technologies
 
 Feedback, ideas, and contributions are very welcome.
+
+### Map Editor
+
+Im Hauptmenü öffnet **Map Editor** eine neu generierte Karte mit 20 × 20 Feldern.
+Ein Klick (oder Tippen) wechselt das Gelände in dieser Reihenfolge:
+Ackerland → Wald → Hügel → Gebirge → Wasser → Stadt → Industrie.
+Ziehen verschiebt die Ansicht; Zoom funktioniert wie im Spiel.
+**Rückgängig** oder **Strg+Z** nimmt Geländeänderungen zurück.
+
+Die Werkzeugleiste bietet einen Kartennamen, **Neu generieren**, **Karte speichern**,
+**Karte laden** und **Zurück zum Menü**. Karten werden als eigene JSON-Dateien
+(`hexagon-map`, Version 1) mit Größe und Gelände einschließlich Straßen gespeichert.
+Spielstände werden weiterhin separat verwaltet. Beim Laden werden vollständige,
+eindeutige Feldpositionen und gültige Geländearten geprüft; das Format unterstützt
+Breite und Höhe von jeweils 1 bis 200 Feldern. Die Generierung im Editor bleibt
+zunächst bei 20 × 20. Der Editor bearbeitet keine laufende Partie.
+
+Im Dialog **New Game** kann über **Load Map…** eine gespeicherte Editor-Karte
+gewählt werden, bevor **1 Player vs AI** oder **2 Players Online** gestartet wird.
+**Random Map** verwendet eine neu generierte Karte mit 20 × 20 Feldern. Online
+wählt der Host die Karte; der Gast erhält sie automatisch. Online-Karten dürfen
+höchstens 100 × 100 Felder groß sein. Beide Seiten benötigen Platz für eine Basis
+mit drei benachbarten Landeinheiten im linken bzw. rechten Drittel der Karte und
+eine Landverbindung zwischen den Basen. Ungeeignete Karten werden vor dem
+Spielstart abgewiesen; ihr Gelände wird nicht automatisch verändert.
