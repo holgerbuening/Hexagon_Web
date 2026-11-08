@@ -114,10 +114,10 @@ The goal is not perfect play, but **believable and readable tactical behavior**.
 The levels differ in how the AI plays (see `aiProfiles` in `src/core/systems/aiSystem.ts`):
 
 - **Easy** – sometimes picks a random attack instead of the best one, often does not advance, ignores danger, does not focus fire, buys from a fixed list and retreats late.
-- **Normal** – full tactics: move-and-attack, target scoring, threat-aware positioning, focus fire and counter-buying.
-- **Hard** – like Normal, plus defending the own headquarter and a 1.5× income bonus.
+- **Normal** – full tactics: move-and-attack, target scoring, threat-aware positioning, focus fire and counter-buying, plus a 1.5× income bonus.
+- **Hard** – like Normal, plus defending the own headquarter and a 2.5× income bonus.
 
-In simulations Normal wins about 79 % of games against Easy and Hard about 59 % against Normal.
+In simulations Normal wins about 88 % of games against Easy and Hard about 58 % against Normal.
 
 ### Testing and balancing the AI
 

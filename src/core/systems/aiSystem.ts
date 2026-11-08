@@ -60,7 +60,7 @@ export const aiProfiles: Record<AiDifficulty, AiProfile> = {
     defendHeadquarter: false,
   },
   normal: {
-    incomeMultiplier: 1,
+    incomeMultiplier: 1.5,
     mistakeChance: 0,
     idleChance: 0,
     threatWeight: 1,
@@ -70,7 +70,7 @@ export const aiProfiles: Record<AiDifficulty, AiProfile> = {
     defendHeadquarter: false,
   },
   hard: {
-    incomeMultiplier: 1.5,
+    incomeMultiplier: 2.5,
     mistakeChance: 0,
     idleChance: 0,
     threatWeight: 1,

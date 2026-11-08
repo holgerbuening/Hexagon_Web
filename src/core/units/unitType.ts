@@ -64,7 +64,7 @@ export const UNIT_TYPES: Record<UnitType, UnitTypeData> = {
   [UnitType.Artillery]: {
     name: "Artillery",
     maxMovement: 2,
-    offense: 200,
+    offense: 180,
     defense: 50,
     attackRange: 3,
     maxHP: 100,
@@ -99,7 +99,7 @@ export const UNIT_TYPES: Record<UnitType, UnitTypeData> = {
     attackRange: 1,
     maxHP: 100,
     spriteKey: "engineer",
-    price: 180
+    price: 120
   }
 
 };
