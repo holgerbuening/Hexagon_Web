@@ -843,7 +843,6 @@ export class AiSystem {
 
       const previousMovement = garrison.remainingMovement;
       if (!this.movementSystem.tryMoveUsingReachable(state, garrison, destination, departureReachable)) continue;
-      if (!this.movementSystem.tryMoveUsingReachable(state, replacement, holding, arrivalReachable)) {
         garrison.q = holding.q;
         garrison.r = holding.r;
         garrison.remainingMovement = previousMovement;
