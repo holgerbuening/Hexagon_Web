@@ -11,7 +11,7 @@ export interface MapDocument {
 }
 
 export function parseMapDocument(value: unknown): MapDocument {
-  const fail = (): never => { throw new Error("Ungültige Kartendatei."); };
+  const fail = (): never => { throw new Error("Invalid map file."); };
   if (!value || typeof value !== "object") return fail();
   const map = value as Record<string, unknown>;
   const { width, height } = map;

@@ -1373,7 +1373,7 @@ function openMapEditor(): void {
   const name = document.createElement("input");
   name.className = "start-dialog-input";
   name.value = mapEditor.document.name;
-  name.setAttribute("aria-label", "Kartenname");
+  name.setAttribute("aria-label", "Map name");
   name.maxLength = 120;
   name.addEventListener("input", () => {
     if (!mapEditor) return;
@@ -1392,7 +1392,7 @@ function openMapEditor(): void {
     toolbar.append(element);
     return element;
   };
-  button("Neu generieren", () => {
+  button("Generate New Map", () => {
     confirmDiscardMap(() => {
       mapEditor = new MapEditor();
       name.value = mapEditor.document.name;
@@ -1400,8 +1400,8 @@ function openMapEditor(): void {
       renderAll();
     });
   });
-  button("Rückgängig", () => { mapEditor?.undo(); renderAll(); }).dataset.undo = "";
-  button("Karte speichern", () => {
+  button("Undo", () => { mapEditor?.undo(); renderAll(); }).dataset.undo = "";
+  button("Save Map", () => {
     if (!mapEditor) return;
     const blob = new Blob([serializeMapDocument(mapEditor.document)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -1414,7 +1414,7 @@ function openMapEditor(): void {
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     mapEditor.dirty = false;
   });
-  button("Karte laden", () => {
+  button("Load Map", () => {
     const targetEditor = mapEditor;
     const input = document.createElement("input");
     input.type = "file";
@@ -1432,13 +1432,13 @@ function openMapEditor(): void {
           centerEditorMap();
           renderAll();
         });
-      }).catch(() => window.alert("Karte konnte nicht geladen werden. Bitte eine gültige Hexagon-Kartendatei auswählen."));
+      }).catch(() => window.alert("Could not load the map. Please select a valid Hexagon map file."));
     });
     input.click();
   });
-  button("Zurück zum Menü", closeMapEditor);
+  button("Back to Menu", closeMapEditor);
   const help = document.createElement("small");
-  help.textContent = "Klick: Ackerland → Wald → Hügel → Gebirge → Wasser → Stadt → Industrie · Ziehen: Verschieben · Strg+Z: Rückgängig";
+  help.textContent = "Click: Farmland → Woods → Hills → Mountain → Ocean → City → Industry · Drag: Pan · Ctrl+Z: Undo";
   toolbar.append(help);
   editorToolbar = toolbar;
   appRoot?.append(toolbar);

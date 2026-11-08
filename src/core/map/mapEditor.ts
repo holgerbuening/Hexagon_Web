@@ -13,7 +13,7 @@ export class MapEditor {
   private history: Array<{ tile: HexTile; field: FieldType }> = [];
 
   constructor(width = 20, height = 20, rng?: Rng) {
-    this.document = { format: "hexagon-map", version: 1, name: "Neue Karte", width, height,
+    this.document = { format: "hexagon-map", version: 1, name: "New Map", width, height,
       tiles: new MapGenerator(rng).generate(width, height).tiles };
   }
 
