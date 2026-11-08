@@ -40,3 +40,4 @@ Thumbs.db
 # Dev files
 dev/
 deploy.sh
+dist-server/

@@ -138,6 +138,39 @@ Random numbers in map generation, start units and combat come from an injectable
   - Maps (`.map`)
 - Zoomable map view
 - Visual overlays for movement and attacks
+- Two-player online games through an invite link (see below)
+
+---
+
+## Online Play
+
+**Start New Game → 2 Players Online** creates a game and shows an invite link. Send the link to your opponent; when they open it, the game starts with two players (the creator plays Lupony and begins).
+
+How it works: the player whose turn it is plays on their own copy of the game and sends the complete game state to the other player when the turn ends (or when the game is won). A small relay server only forwards these messages between the two browsers. If the opponent loses the connection, they can reload the invite link and continue with the current state. The opponent's moves are not animated; the new state simply appears when it is your turn.
+
+### Running the relay server
+
+For development, run `npm run relay` (listens on `127.0.0.1:8787`) next to `npm run dev`. Production builds connect to `wss://<your host>/hexagon-ws`, so the relay has to be reachable under that path.
+
+1. `npm run build:server` creates the single file `dist-server/relay.mjs`. It needs only Node.js 18 or newer, no `node_modules`.
+2. Copy it to the server and start it, e.g. `PORT=8787 ALLOWED_ORIGINS=https://www.buening.eu node relay.mjs` (as a systemd service or with a process manager of your choice). `HOST` defaults to `127.0.0.1`, so only the reverse proxy can reach it.
+3. Forward the path `/hexagon-ws` to it. With nginx:
+
+   ```nginx
+   location /hexagon-ws {
+       proxy_pass http://127.0.0.1:8787;
+       proxy_http_version 1.1;
+       proxy_set_header Upgrade $http_upgrade;
+       proxy_set_header Connection "upgrade";
+       proxy_read_timeout 3600s;
+   }
+   ```
+
+   With Apache (`mod_proxy_wstunnel`): `ProxyPass "/hexagon-ws" "ws://127.0.0.1:8787"`.
+
+The relay does not store anything; a game exists only while its creator is connected. It limits message size, message rate and the number of open games.
+
+Limitations: the game state is not validated by the server, so the players have to trust each other; a modified client could cheat.
 
 ---
 
@@ -155,7 +188,7 @@ Random numbers in map generation, start units and combat come from an injectable
 - Smarter AI priorities
 - UI polish and animations
 - Sound and visual feedback
-- Multiplayer (long-term)
+- Animations of the opponent's moves in online games
 
 ---
 

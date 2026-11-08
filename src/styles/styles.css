@@ -189,6 +189,12 @@ canvas:active {
   transform: translateY(1px);
 }
 
+.uiButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(0.4);
+}
+
 .uiButton--ok {
   background: rgb(158, 175, 76);
   border: 2px solid rgb(170, 176, 68);
@@ -431,6 +437,46 @@ canvas:active {
 .start-dialog-button:active {
   transform: translateY(0);
   box-shadow: none;
+}
+
+.start-dialog--compact {
+  min-height: 0;
+  gap: 18px;
+  padding: 36px 32px;
+}
+
+.start-dialog-heading {
+  font-size: clamp(28px, 4vw, 44px);
+  margin: 0;
+  text-shadow: 0 4px 14px rgba(0, 0, 0, 0.8);
+}
+
+.start-dialog-text {
+  margin: 0;
+  max-width: 560px;
+  font-size: 18px;
+  line-height: 1.4;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+.start-dialog-input {
+  width: min(560px, 100%);
+  box-sizing: border-box;
+  padding: 12px 14px;
+  font-size: 16px;
+  border-radius: 12px;
+  border: 2px solid rgb(170, 176, 68);
+  background: rgba(0, 0, 0, 0.55);
+  color: #ffffff;
+}
+
+.hudOnline {
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+.hudOnline.is-hidden {
+  display: none;
 }
 
 .start-dialog-button:disabled {

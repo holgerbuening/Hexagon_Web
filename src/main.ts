@@ -13,6 +13,11 @@ import { showAboutDialog } from "./ui/aboutDialog";
 import { PLAYER_NAMES } from "./core/types";
 import type { SettingsState } from "./ui/settingsDialog";
 import { aiProfiles } from "./core/systems/aiSystem";
+import { OnlineSession, RelayRequestError, type CloseReason } from "./net/onlineSession";
+import { buildInviteLink, getRelayUrl, parseInviteRoom } from "./net/relayUrl";
+import { isPlausibleGameState } from "./net/stateGuard";
+import type { SavedGameState } from "./core/types";
+import { describeSeat, showGameModeDialog, showInviteDialog, showNoticeDialog, type InviteDialogHandle } from "./ui/onlineDialog";
 
 const BASE_HEX_SIZE = 64;
 const canvas = document.getElementById("game") as HTMLCanvasElement;
@@ -39,6 +44,7 @@ const hudUnitExperience = document.getElementById("hudUnitExperience") as HTMLSp
 const hudZoom = document.getElementById("hudZoom") as HTMLSpanElement;
 const hudFlag = document.getElementById("hudFlag") as HTMLImageElement | null;
 const hudEndTurn = document.getElementById("hudEndTurn") as HTMLButtonElement | null;
+const hudOnline = document.getElementById("hudOnline") as HTMLDivElement | null;
 const hudSettings = document.getElementById("hudSettings") as HTMLImageElement | null;
 // App root for dialogs
 const appRoot = document.getElementById("app");
@@ -62,6 +68,22 @@ const fxAudio = new FxAudioController({
   volume: settingsState.soundEffectsVolume,
 });
 
+// Online game with a second human player. The player whose turn it is plays on their own
+// copy of the game and sends the full state to the other one when the turn ends.
+interface OnlineGame {
+  session: OnlineSession;
+  myPlayer: PlayerId;
+  peerConnected: boolean;
+  // Link the host sends to the opponent; the guest does not need it.
+  inviteLink: string | null;
+  // Dialog shown while the guest waits for the first state of the host.
+  waitingDialog: { close: () => void } | null;
+  inviteDialog: InviteDialogHandle | null;
+}
+let online: OnlineGame | null = null;
+// Incremented whenever a pending connection attempt is cancelled.
+let onlineAttempt = 0;
+
 
 // Render once initially
 resizeCanvasToDisplaySize(canvas);
@@ -71,8 +93,13 @@ if (centerTile) {
   renderer.centerOnAxial(centerTile.q, centerTile.r);
 }
 renderAll();
-// Show start dialog
-openStartDialog();
+// Show start dialog, or join the game of an invite link
+const inviteRoom = parseInviteRoom(window.location.search);
+if (inviteRoom) {
+  void joinOnlineGame(inviteRoom);
+} else {
+  openStartDialog();
+}
 
 if (hudSettings) {
   hudSettings.addEventListener("click", () => {
@@ -86,10 +113,11 @@ if (hudSettings) {
 // End turn button
 if (hudEndTurn) {
   hudEndTurn.addEventListener("click", () => {
-    if (isInputBlocked()) {
+    if (isInputBlocked() || isOpponentsTurn()) {
       return;
     }
     const aiPreviews = game.endTurn();
+    sendOnlineState();
     renderAll();
     if (aiPreviews.length > 0) {
       showAiCombatDialogs(aiPreviews);
@@ -207,6 +235,9 @@ canvas.addEventListener("mouseup", function (ev) {
   const world = renderer.screenToWorld(sx, sy);
   const hex = pixelToAxial(world.x, world.y, renderer.getHexSize());
 
+  if (isOpponentsTurn()) {
+    return;
+  }
   const res = game.selectHex(hex);
   //console.log("Selected hex:", hex, "Combat preview Main.ts :", preview);
   if (res.kind === "combat") {
@@ -345,6 +376,9 @@ canvas.addEventListener("touchend", function (ev) {
     const point = getTouchPoint(touch);
     const world = renderer.screenToWorld(point.x, point.y);
     const hex = pixelToAxial(world.x, world.y, renderer.getHexSize());
+    if (isOpponentsTurn()) {
+      return;
+    }
     const res = game.selectHex(hex);
     if (res.kind === "combat") {
       combatDialog(res.preview);
@@ -403,8 +437,11 @@ function updateHud(): void {
   const state = game.getState();
 
   hudTurn.textContent = String(state.turn);
-  hudPlayer.textContent = PLAYER_NAMES[state.currentPlayer];
+  hudPlayer.textContent = online
+    ? describeSeat(state.currentPlayer, online.myPlayer)
+    : PLAYER_NAMES[state.currentPlayer];
   hudBalance.textContent = String(state.playerBalances[state.currentPlayer] ?? 0);
+  updateOnlineHud();
 
   if (hudFlag) {
     // English comment: Update flag image based on current player id
@@ -665,6 +702,8 @@ function combatDialog(preview: CombatPreview): void {
             renderAll();
             const state = game.getState();
             if (state.gameOver && state.winner !== null) {
+              // The opponent only learns about the end of the game through the state.
+              sendOnlineState();
               openWinDialog(state.winner);
             }
           },
@@ -801,10 +840,7 @@ function openStartDialog(): void {
       });
     },
     onStartNew: () => {
-      game.configureAi(1, aiProfiles[settingsState.aiDifficulty]);
-      game.startNewGame();
-      applyFullscreenPreference();
-      renderAll();
+      openGameModeDialog();
     },
     onOpenSettings: () => {
       openSettingsDialog();
@@ -813,6 +849,318 @@ function openStartDialog(): void {
       openAboutDialog();
     },
   });
+}
+
+function applyAiConfiguration(): void {
+  // In an online game both players are people.
+  game.configureAi(online ? null : AI_PLAYER_ID, aiProfiles[settingsState.aiDifficulty]);
+}
+
+function isOpponentsTurn(): boolean {
+  return online !== null && game.getState().currentPlayer !== online.myPlayer;
+}
+
+function sendOnlineState(): void {
+  if (!online) {
+    return;
+  }
+  online.session.send({ kind: "state", state: game.serializeState() });
+}
+
+function updateOnlineHud(): void {
+  if (!hudOnline) {
+    return;
+  }
+  if (!online) {
+    hudOnline.classList.add("is-hidden");
+    hudOnline.style.cursor = "";
+    if (hudEndTurn) {
+      hudEndTurn.disabled = false;
+    }
+    return;
+  }
+
+  const opponentsTurn = isOpponentsTurn();
+  const canCopyInvite = !online.peerConnected && online.inviteLink !== null;
+  hudOnline.classList.remove("is-hidden");
+  hudOnline.style.cursor = canCopyInvite ? "pointer" : "";
+  if (canCopyInvite) {
+    hudOnline.textContent = "Opponent offline – click to copy the invite link";
+  } else {
+    hudOnline.textContent = opponentsTurn ? "Waiting for the opponent…" : "Your turn";
+  }
+  if (hudEndTurn) {
+    hudEndTurn.disabled = opponentsTurn;
+  }
+}
+
+if (hudOnline) {
+  hudOnline.addEventListener("click", () => {
+    if (!online || online.peerConnected || online.inviteLink === null || !navigator.clipboard) {
+      return;
+    }
+    const link = online.inviteLink;
+    void navigator.clipboard.writeText(link).then(() => {
+      if (hudOnline) {
+        hudOnline.textContent = "Invite link copied";
+      }
+    });
+  });
+}
+
+function startFreshGame(): void {
+  // Some generated maps have no room for the start units.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      game.startNewGame();
+      return;
+    } catch (error) {
+      if (attempt >= 10) {
+        throw error;
+      }
+    }
+  }
+}
+
+function showFreshMap(): void {
+  renderer.resetView();
+  const mapCenter = game.tryGetMapCenterTile();
+  if (mapCenter) {
+    renderer.centerOnAxial(mapCenter.q, mapCenter.r);
+  }
+}
+
+function openGameModeDialog(): void {
+  if (!appRoot) {
+    return;
+  }
+  showGameModeDialog(appRoot, {
+    onSinglePlayer: () => {
+      leaveOnline();
+      startFreshGame();
+      applyFullscreenPreference();
+      renderAll();
+    },
+    onOnline: () => {
+      void startOnlineHost();
+    },
+    onBack: () => {
+      openStartDialog();
+    },
+  });
+}
+
+function describeRelayError(error: unknown): string {
+  const reason = error instanceof RelayRequestError ? error.reason : "unreachable";
+  switch (reason) {
+    case "room-not-found":
+      return "This game does not exist anymore. Ask your opponent for a new invite link.";
+    case "room-full":
+      return "This game already has two players. If you were just disconnected, wait a moment and reload the page.";
+    case "too-many-rooms":
+      return "The game server is busy right now. Please try again later.";
+    default:
+      return "The game server could not be reached. Check your connection and try again.";
+  }
+}
+
+function leaveOnline(keepInviteLink = false): void {
+  onlineAttempt += 1;
+  const current = online;
+  online = null;
+  if (current) {
+    current.waitingDialog?.close();
+    current.inviteDialog?.close();
+    current.session.close();
+  }
+  if (!keepInviteLink && parseInviteRoom(window.location.search)) {
+    window.history.replaceState(null, "", window.location.pathname);
+  }
+  applyAiConfiguration();
+  renderAll();
+}
+
+function handleOnlineClosed(reason: CloseReason): void {
+  if (!online || reason === "closed-by-user" || !appRoot) {
+    return;
+  }
+  const text =
+    reason === "room-closed"
+      ? "The host left the game."
+      : "The connection to the game server was lost. Open the invite link again to reconnect.";
+  leaveOnline(true);
+  showNoticeDialog(appRoot, {
+    title: "Online Game",
+    text,
+    onOk: () => {
+      openStartDialog();
+    },
+  });
+}
+
+function applyRemoteState(state: unknown): void {
+  if (!online) {
+    return;
+  }
+  if (!isPlausibleGameState(state)) {
+    console.warn("Ignored an invalid game state from the opponent.");
+    return;
+  }
+  try {
+    game.loadState(state as SavedGameState);
+  } catch (error) {
+    console.error("Failed to load the game state of the opponent.", error);
+    return;
+  }
+
+  if (online.waitingDialog) {
+    online.waitingDialog.close();
+    online.waitingDialog = null;
+    showFreshMap();
+  }
+  renderAll();
+
+  const current = game.getState();
+  if (current.gameOver && current.winner !== null) {
+    openWinDialog(current.winner);
+  }
+}
+
+function showConnectingDialog(text: string): { close: () => void } | null {
+  if (!appRoot) {
+    return null;
+  }
+  return showNoticeDialog(appRoot, {
+    title: "Online Game",
+    text,
+    buttonLabel: "Cancel",
+    onOk: () => {
+      leaveOnline();
+      openStartDialog();
+    },
+  });
+}
+
+async function startOnlineHost(): Promise<void> {
+  if (!appRoot) {
+    return;
+  }
+  leaveOnline();
+  const attempt = onlineAttempt;
+  const pending = showConnectingDialog("Connecting to the game server…");
+
+  let created: { session: OnlineSession; room: string };
+  try {
+    created = await OnlineSession.createRoom(getRelayUrl(window.location), {
+      onPeerJoined: () => {
+        if (!online) {
+          return;
+        }
+        online.peerConnected = true;
+        online.inviteDialog?.close();
+        online.inviteDialog = null;
+        sendOnlineState();
+        renderAll();
+      },
+      onPeerLeft: () => {
+        if (!online) {
+          return;
+        }
+        online.peerConnected = false;
+        renderAll();
+      },
+      onGameMessage: (message) => applyRemoteState(message.state),
+      onClosed: handleOnlineClosed,
+    });
+  } catch (error) {
+    if (attempt !== onlineAttempt) {
+      return;
+    }
+    pending?.close();
+    showNoticeDialog(appRoot, {
+      title: "Online Game",
+      text: describeRelayError(error),
+      onOk: () => {
+        openStartDialog();
+      },
+    });
+    return;
+  }
+
+  if (attempt !== onlineAttempt) {
+    created.session.close();
+    return;
+  }
+  pending?.close();
+
+  const inviteLink = buildInviteLink(window.location, created.room);
+  online = {
+    session: created.session,
+    myPlayer: 0,
+    peerConnected: false,
+    inviteLink,
+    waitingDialog: null,
+    inviteDialog: null,
+  };
+  applyAiConfiguration();
+  startFreshGame();
+  showFreshMap();
+  applyFullscreenPreference();
+  renderAll();
+  online.inviteDialog = showInviteDialog(appRoot, {
+    link: inviteLink,
+    onCancel: () => {
+      leaveOnline();
+      openStartDialog();
+    },
+  });
+}
+
+async function joinOnlineGame(room: string): Promise<void> {
+  if (!appRoot) {
+    return;
+  }
+  leaveOnline(true);
+  const attempt = onlineAttempt;
+  const pending = showConnectingDialog("Joining the game…");
+
+  let session: OnlineSession;
+  try {
+    session = await OnlineSession.joinRoom(getRelayUrl(window.location), room, {
+      onGameMessage: (message) => applyRemoteState(message.state),
+      onClosed: handleOnlineClosed,
+    });
+  } catch (error) {
+    if (attempt !== onlineAttempt) {
+      return;
+    }
+    pending?.close();
+    showNoticeDialog(appRoot, {
+      title: "Online Game",
+      text: describeRelayError(error),
+      onOk: () => {
+        leaveOnline();
+        openStartDialog();
+      },
+    });
+    return;
+  }
+
+  if (attempt !== onlineAttempt) {
+    session.close();
+    return;
+  }
+
+  // The host sends the game as soon as the connection is established.
+  online = {
+    session,
+    myPlayer: 1,
+    peerConnected: true,
+    inviteLink: null,
+    waitingDialog: pending,
+    inviteDialog: null,
+  };
+  applyAiConfiguration();
 }
 
 function openAboutDialog(): void {
@@ -836,7 +1184,7 @@ function openSettingsDialog(): void {
     initialState: settingsState,
     onApply: (nextState) => {
       settingsState = nextState;
-      game.configureAi(1, aiProfiles[settingsState.aiDifficulty]);
+      applyAiConfiguration();
       game.configureAnimations(settingsState.animationSpeed, settingsState.animationsEnabled);
       movementAudio.setEnabled(settingsState.soundEffectsEnabled);
       movementAudio.setVolume(settingsState.soundEffectsVolume);
@@ -894,7 +1242,8 @@ function loadGameFromFile(onSelected?: () => void): void {
       try {
         const parsed = JSON.parse(reader.result);
         game.loadState(parsed);
-        game.configureAi(1, aiProfiles[settingsState.aiDifficulty]);
+        leaveOnline();
+        applyAiConfiguration();
         renderAll();
       } catch (error) {
         console.error("Failed to load save game.", error);
