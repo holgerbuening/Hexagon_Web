@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Hexagon · Test mission</title>
+    <link rel="stylesheet" href="/src/styles/styles.css" />
+  </head>
+  <body>
+    <a class="author-return" href="./index.html" style="position:fixed;right:16px;top:16px;z-index:10000;background:#26352c;color:white;padding:12px;border-radius:8px;text-decoration:none">← Back to editor</a>
+    <div id="app">
+      <canvas id="game" width="1000" height="700"></canvas>
+
+      <!-- HUD overlay -->
+      <div id="hud" class="hud uiPanel uiPanel--hud">
+        <div class="hudFlagWrap">
+          <img id="hudFlag" class="hudFlag" src="" alt="Current player flag" />
+          <img id="hudSettings" class="hudSettings" src="/images/icons/gear_icon.png" alt="Open start menu" />
+        </div>
+
+        <div class="hudBody">
+          <div><strong>Turn:</strong> <span id="hudTurn">-</span></div>
+          <div><strong>Player:</strong> <span id="hudPlayer">-</span></div>
+          <div id="hudOnline" class="hudOnline is-hidden"></div>
+          <div><strong>Balance:</strong> <span id="hudBalance">-</span></div>
+          <div><strong>Selected:</strong> <span id="hudSelected">-</span></div>
+          <div class="hudSelectedUnit">
+            <strong>Selected Unit:</strong>
+            <img id="hudUnitImage" class="hudUnitImage is-hidden" src="" alt="Selected unit" />
+            <div class="hudUnitStats">
+              <div><strong>HP:</strong> <span id="hudUnitHp">-</span></div>
+              <div><strong>Offense:</strong> <span id="hudUnitOffense">-</span></div>
+              <div><strong>Defense:</strong> <span id="hudUnitDefense">-</span></div>
+              <div><strong>Experience:</strong> <span id="hudUnitExperience">-</span></div>
+            </div>
+          </div>
+          <div><strong>Zoom:</strong> <span id="hudZoom">-</span></div>
+        </div>
+
+        <button id="hudEndTurn" class="uiButton uiButton--ok" type="button">
+          End Turn
+        </button>
+      </div>
+    </div>
+
+    <script type="module" src="/src/author/play.ts"></script>
+  </body>
+</html>

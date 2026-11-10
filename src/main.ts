@@ -1,3 +1,4 @@
+import { consumeGameLaunch } from "./gameLaunch";
 import { MapEditor } from "./core/map/mapEditor";
 import { type MapDocument, serializeMapDocument } from "./core/map/mapSerializer";
 import { GameCore } from "./core/gameCore";
@@ -92,6 +93,15 @@ let online: OnlineGame | null = null;
 let onlineAttempt = 0;
 
 
+// Prepared scenarios use the same game loop, combat UI and AI as ordinary play.
+const preparedGame = consumeGameLaunch();
+if (preparedGame) {
+  game.loadState(preparedGame.state);
+  settingsState.aiDifficulty = preparedGame.difficulty;
+  settingsState.fullscreen = false;
+  game.configureAi(AI_PLAYER_ID, aiProfiles[preparedGame.difficulty]);
+}
+
 // Render once initially
 resizeCanvasToDisplaySize(canvas);
 const centerTile = game.tryGetMapCenterTile();
@@ -104,7 +114,7 @@ renderAll();
 const inviteRoom = parseInviteRoom(window.location.search);
 if (inviteRoom) {
   void joinOnlineGame(inviteRoom);
-} else {
+} else if (!preparedGame) {
   openStartDialog();
 }
 

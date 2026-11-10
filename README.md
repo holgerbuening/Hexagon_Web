@@ -246,3 +246,10 @@ höchstens 100 × 100 Felder groß sein. Beide Seiten benötigen Platz für eine
 mit drei benachbarten Landeinheiten im linken bzw. rechten Drittel der Karte und
 eine Landverbindung zwischen den Basen. Ungeeignete Karten werden vor dem
 Spielstart abgewiesen; ihr Gelände wird nicht automatisch verändert.
+
+## Autorenstudio
+
+Missionseditor und Kampagnenverwaltung lokal mit `npm run dev:editor` starten
+und `http://127.0.0.1:5174/author/index.html` öffnen. Die Autorenwerkzeuge
+werden separat nach `dist-author/` gebaut und sind nicht Teil des normalen
+Spielbuilds. Anleitung: [Autorenstudio](docs/AUTORENSTUDIO.md).
