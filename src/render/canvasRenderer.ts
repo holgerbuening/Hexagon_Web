@@ -18,6 +18,25 @@ const COMBAT_DEFENDER_FILL = "rgba(255, 90, 90, 0.2)";
 
 
 export class CanvasRenderer {
+  private combatPresentation = new Map<Unit, { scale: number; offsetQ: number; offsetR: number }>();
+
+  public setCombatPresentation(unit: Unit, scale: number, offsetQ: number, offsetR: number): void {
+    this.combatPresentation.set(unit, { scale, offsetQ, offsetR });
+  }
+
+  public clearCombatPresentation(): void {
+    this.combatPresentation.clear();
+  }
+
+  public getCameraCenter(): { x: number; y: number } {
+    return { x: -this.panX / this.zoom, y: -this.panY / this.zoom };
+  }
+
+  public centerOnWorld(x: number, y: number): void {
+    this.panX = -x * this.zoom;
+    this.panY = -y * this.zoom;
+  }
+
   private ctx: CanvasRenderingContext2D;
   private size: number;
 
@@ -108,9 +127,12 @@ export class CanvasRenderer {
     }
 
 
-    // Draw units
+    // Combat participants are drawn last so enlarged sprites stay above other units.
     for (const unit of state.units) {
-      this.drawUnit(unit);
+      if (!this.combatPresentation.has(unit)) this.drawUnit(unit);
+    }
+    for (const unit of state.units) {
+      if (this.combatPresentation.has(unit)) this.drawUnit(unit);
     }
 
     // Reset transform for HUD (screen space)
@@ -294,7 +316,11 @@ export class CanvasRenderer {
   }
 
   private drawUnit(unit: Unit): void {
-    const p = axialToPixel(unit.pos.q, unit.pos.r, this.size);
+    const presentation = this.combatPresentation.get(unit);
+    const p = axialToPixel(
+      unit.pos.q + (presentation?.offsetQ ?? 0),
+      unit.pos.r + (presentation?.offsetR ?? 0), this.size
+    );
     this.drawUnitFlag(unit, p.x, p.y);
     this.drawUnitRank(unit, p.x, p.y);
     this.drawHpBar(unit, p.x, p.y);
@@ -304,7 +330,7 @@ export class CanvasRenderer {
     if (!img || !img.complete) return;
 
      // Target size (in world units). Use ONE dimension as base.
-  const targetH = (2 * this.size) * 0.7; // tweak factor to taste
+  const targetH = (2 * this.size) * 0.7 * (presentation?.scale ?? 1); // tweak factor to taste
   const aspect = img.naturalWidth / img.naturalHeight;
   const targetW = targetH * aspect;
 

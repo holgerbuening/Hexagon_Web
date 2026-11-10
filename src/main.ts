@@ -1,7 +1,7 @@
 import { MapEditor } from "./core/map/mapEditor";
 import { type MapDocument, serializeMapDocument } from "./core/map/mapSerializer";
 import { GameCore } from "./core/gameCore";
-import { pixelToAxial } from "./core/hexMath";
+import { axialToPixel, pixelToAxial } from "./core/hexMath";
 import type { CombatPreview, CombatPreviewEntry, PlayerId, SelectHexResult} from "./core/types";
 import { Unit } from "./core/units/unit";
 import { FxAudioController, MovementAudioController } from "./audio/movementAudio";
@@ -30,9 +30,7 @@ const game = new GameCore(20,20); // 20x20 map
 renderer.setInvalidateHandler(renderAll);
 const AI_PLAYER_ID: PlayerId = 1;
 const UNIT_ANIMATION_EPSILON = 0.001;
-const AI_COMBAT_ZOOM_TARGET = 1.8;
-const AI_COMBAT_ZOOM_DURATION_MS = 450;
-const AI_COMBAT_DIALOG_DELAY_MS = 1500;
+let combatIntroActive = false;
 const centeredAiUnits = new Set<Unit>();
 
 // HUD elements
@@ -145,7 +143,7 @@ let touchStartedInCanvas = false;
 
 // If mouse moved more than this, treat as drag
 const DRAG_THRESHOLD_PX = 3;
-const isInputBlocked = (): boolean => !!document.querySelector(".dialog-overlay") || (!mapEditor && game.hasActiveUnitAnimations());
+const isInputBlocked = (): boolean => combatIntroActive || !!document.querySelector(".dialog-overlay") || (!mapEditor && game.hasActiveUnitAnimations());
 
 // --- Keyboard control state ---
 let panLeft = false;
@@ -623,7 +621,7 @@ function animationLoop(timeMs: number): void {
   lastFrameTimeMs = timeMs;
 
   let didChange = false;
-  const didFocusAiMovement = !mapEditor && focusOnAiMoveStart();
+  const didFocusAiMovement = !mapEditor && !combatIntroActive && focusOnAiMoveStart();
   if (didFocusAiMovement) {
     didChange = true;
   }
@@ -727,8 +725,9 @@ function combatDialog(preview: CombatPreview): void {
       if (attacker && defender) {
         game.setCombatOverlay(preview.attackerPos, preview.defenderPos);
         renderAll();
-        showCombatDialog(appRoot, attacker, defender, preview, {
+        playCombatIntro(attacker, defender, () => showCombatDialog(appRoot, attacker, defender, preview, {
           onOk: () => {
+            renderer.clearCombatPresentation();
             const destroyedUnits = game.applyCombat(preview);
             if (destroyedUnits > 0) {
               fxAudio.playUnitDestroyed();
@@ -743,44 +742,56 @@ function combatDialog(preview: CombatPreview): void {
             }
           },
           
-        });
+        }));
       }
     }
 }
 
-function animateZoomTo(
-  targetZoom: number,
-  durationMs: number,
-  onComplete: () => void
-): void {
-  const startZoom = renderer.getZoom();
-  if (Math.abs(targetZoom - startZoom) < 0.001 || durationMs <= 0) {
+function playCombatIntro(attacker: Unit, defender: Unit, onComplete: () => void): void {
+  if (!settingsState.animationsEnabled) {
     onComplete();
     return;
   }
 
+  combatIntroActive = true;
+  const startCenter = renderer.getCameraCenter();
+  const midpoint = axialToPixel(
+    (attacker.pos.q + defender.pos.q) / 2,
+    (attacker.pos.r + defender.pos.r) / 2,
+    renderer.getHexSize()
+  );
+  const deltaQ = defender.pos.q - attacker.pos.q;
+  const deltaR = defender.pos.r - attacker.pos.r;
+  // Cap the approach for ranged attacks to a small fraction of one hex.
+  const distance = Math.max(Math.abs(deltaQ), Math.abs(deltaR), Math.abs(deltaQ + deltaR), 1);
+  const approach = Math.min(0.12, 0.22 / distance);
+  const ease = (t: number) => {
+    const clamped = Math.max(0, Math.min(1, t));
+    return clamped * clamped * (3 - 2 * clamped);
+  };
   const startTime = performance.now();
   const step = (now: number) => {
     const elapsed = now - startTime;
-    const t = Math.min(elapsed / durationMs, 1);
-    const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-    const nextZoom = startZoom + (targetZoom - startZoom) * eased;
-    const currentZoom = renderer.getZoom();
-    const zoomFactor = nextZoom / currentZoom;
-    if (Math.abs(zoomFactor - 1) > 0.0001) {
-      renderer.zoomAtCenter(zoomFactor);
-      renderAll();
-    }
-    if (t < 1) {
+    const camera = ease(elapsed / 900);
+    renderer.centerOnWorld(
+      startCenter.x + (midpoint.x - startCenter.x) * camera,
+      startCenter.y + (midpoint.y - startCenter.y) * camera
+    );
+    const attackerScale = 1 + ease((elapsed - 900) / 700);
+    const defenderScale = 1 + ease((elapsed - 1600) / 700);
+    const movement = approach * ease((elapsed - 2300) / 550);
+    renderer.setCombatPresentation(attacker, attackerScale, deltaQ * movement, deltaR * movement);
+    renderer.setCombatPresentation(defender, defenderScale, -deltaQ * movement, -deltaR * movement);
+    renderAll();
+    if (elapsed < 3000) {
       requestAnimationFrame(step);
     } else {
+      combatIntroActive = false;
       onComplete();
     }
   };
-
   requestAnimationFrame(step);
 }
-
 
 function showAiCombatDialogs(previews: CombatPreviewEntry[]): void {
   if (!appRoot) {
@@ -795,18 +806,17 @@ function showAiCombatDialogs(previews: CombatPreviewEntry[]): void {
       return;
     }
 
-    const attacker = Unit.fromSaved(entry.attacker);
-    const defender = Unit.fromSaved(entry.defender);
+    const attacker = game.getUnitAt(entry.preview.attackerPos) ?? Unit.fromSaved(entry.attacker);
+    const defender = game.getUnitAt(entry.preview.defenderPos) ?? Unit.fromSaved(entry.defender);
     game.setCombatOverlay(entry.preview.attackerPos, entry.preview.defenderPos);
-    renderer.centerOnAxial(entry.preview.attackerPos.q, entry.preview.attackerPos.r);
     renderAll();
 
    
 
-    const currentZoom = renderer.getZoom();
     const showDialog = () => {
       showCombatDialog(appRoot, attacker, defender, entry.preview, {
         onOk: () => {
+          renderer.clearCombatPresentation();
           const destroyedUnits = game.applyCombat(entry.preview);
           if (destroyedUnits > 0) {
             fxAudio.playUnitDestroyed();
@@ -823,15 +833,7 @@ function showAiCombatDialogs(previews: CombatPreviewEntry[]): void {
       });
     };
 
-    const startDialogDelay = () => {
-      window.setTimeout(showDialog, AI_COMBAT_DIALOG_DELAY_MS);
-    };
-
-    if (currentZoom < AI_COMBAT_ZOOM_TARGET) {
-      animateZoomTo(AI_COMBAT_ZOOM_TARGET, AI_COMBAT_ZOOM_DURATION_MS, startDialogDelay);
-    } else {
-      startDialogDelay();
-    }
+    playCombatIntro(attacker, defender, showDialog);
   };
 
   showNext();
