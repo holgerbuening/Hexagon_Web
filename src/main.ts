@@ -18,6 +18,7 @@ import { aiProfiles } from "./core/systems/aiSystem";
 import { OnlineSession, RelayRequestError, type CloseReason } from "./net/onlineSession";
 import { buildInviteLink, getRelayUrl, parseInviteRoom } from "./net/relayUrl";
 import { isPlausibleGameState } from "./net/stateGuard";
+import type { GameMessage, OnlineReplay } from "./net/protocol";
 import type { SavedGameState } from "./core/types";
 import { showDiscardMapDialog, describeSeat, showGameModeDialog, showInviteDialog, showNoticeDialog, type InviteDialogHandle } from "./ui/onlineDialog";
 
@@ -31,6 +32,9 @@ renderer.setInvalidateHandler(renderAll);
 const AI_PLAYER_ID: PlayerId = 1;
 const UNIT_ANIMATION_EPSILON = 0.001;
 let combatIntroActive = false;
+let remotePlaybackActive = false;
+let remoteMessages: Promise<void> = Promise.resolve();
+let pendingRemoteMessages = 0;
 let aiPlaybackActive = false;
 let aiPlaybackUnit: Unit | null = null;
 
@@ -142,7 +146,7 @@ let touchStartedInCanvas = false;
 
 // If mouse moved more than this, treat as drag
 const DRAG_THRESHOLD_PX = 3;
-const isInputBlocked = (): boolean => aiPlaybackActive || combatIntroActive || !!document.querySelector(".dialog-overlay") || (!mapEditor && game.hasActiveUnitAnimations());
+const isInputBlocked = (): boolean => remotePlaybackActive || aiPlaybackActive || combatIntroActive || !!document.querySelector(".dialog-overlay") || (!mapEditor && game.hasActiveUnitAnimations());
 
 // --- Keyboard control state ---
 let panLeft = false;
@@ -245,6 +249,7 @@ canvas.addEventListener("mouseup", function (ev) {
     return;
   }
   const res = game.selectHex(hex);
+  if (res.kind !== "combat") sendOnlineState();
   //console.log("Selected hex:", hex, "Combat preview Main.ts :", preview);
   if (res.kind === "combat") {
     combatDialog( res.preview);
@@ -391,6 +396,7 @@ canvas.addEventListener("touchend", function (ev) {
       return;
     }
     const res = game.selectHex(hex);
+  if (res.kind !== "combat") sendOnlineState();
     if (res.kind === "combat") {
       combatDialog(res.preview);
     } else if (res.kind === "headquarter") {
@@ -681,7 +687,7 @@ function animationLoop(timeMs: number): void {
   requestAnimationFrame(animationLoop);
 }
 
-async function playAiTurn(previews: CombatPreviewEntry[]): Promise<void> {
+async function playAiTurn(previews: CombatPreviewEntry[], owner: PlayerId = AI_PLAYER_ID, isCurrent: () => boolean = () => true): Promise<void> {
   if (settingsState.animationsEnabled) {
     aiPlaybackActive = true;
     const moveCamera = (q: number, r: number, duration = 650): Promise<void> => {
@@ -690,6 +696,7 @@ async function playAiTurn(previews: CombatPreviewEntry[]): Promise<void> {
       const started = performance.now();
       return new Promise(resolve => {
         const step = (now: number) => {
+          if (!isCurrent()) { resolve(); return; }
           const t = Math.min((now - started) / duration, 1);
           const eased = t * t * (3 - 2 * t);
           renderer.centerOnWorld(start.x + (target.x - start.x) * eased, start.y + (target.y - start.y) * eased);
@@ -703,7 +710,7 @@ async function playAiTurn(previews: CombatPreviewEntry[]): Promise<void> {
     try {
       // Purchases happen before troop movements; show each purchasing HQ once.
       const shownHeadquarters = new Set<string>();
-      for (const hq of game.getAiPurchaseHeadquarters()) {
+      for (const hq of online ? [] : game.getAiPurchaseHeadquarters()) {
         const key = `${hq.q},${hq.r}`;
         if (shownHeadquarters.has(key)) continue;
         shownHeadquarters.add(key);
@@ -711,15 +718,18 @@ async function playAiTurn(previews: CombatPreviewEntry[]): Promise<void> {
         await new Promise<void>(resolve => window.setTimeout(resolve, 450));
       }
       const movingUnits = game.getState().units.filter(unit =>
-        unit.owner === AI_PLAYER_ID && (unit.animationPath.length > 0 ||
+        unit.owner === owner && (unit.animationPath.length > 0 ||
           Math.abs(unit.pos.q - unit.q) > UNIT_ANIMATION_EPSILON ||
           Math.abs(unit.pos.r - unit.r) > UNIT_ANIMATION_EPSILON));
       for (const unit of movingUnits) {
+        if (!isCurrent()) return;
         await moveCamera(unit.pos.q, unit.pos.r);
+        if (!isCurrent()) return;
         aiPlaybackUnit = unit;
         await new Promise<void>(resolve => {
           let previous = performance.now();
           const step = (now: number) => {
+            if (!isCurrent()) { resolve(); return; }
             game.advanceUnitAnimations(Math.min((now - previous) / 1000, 0.1), [unit]);
             previous = now;
             renderer.centerOnAxial(unit.pos.q, unit.pos.r);
@@ -755,7 +765,9 @@ function combatDialog(preview: CombatPreview): void {
         playCombatIntro(attacker, defender, () => showCombatDialog(appRoot, attacker, defender, preview, {
           onOk: () => {
             renderer.clearCombatPresentation();
+            const before = game.serializeState();
             const destroyedUnits = game.applyCombat(preview);
+            sendOnlineState({ before, preview });
             if (destroyedUnits > 0) {
               fxAudio.playUnitDestroyed();
             }
@@ -763,8 +775,6 @@ function combatDialog(preview: CombatPreview): void {
             renderAll();
             const state = game.getState();
             if (state.gameOver && state.winner !== null) {
-              // The opponent only learns about the end of the game through the state.
-              sendOnlineState();
               openWinDialog(state.winner);
             }
           },
@@ -774,7 +784,7 @@ function combatDialog(preview: CombatPreview): void {
     }
 }
 
-function playCombatIntro(attacker: Unit, defender: Unit, onComplete: () => void): void {
+function playCombatIntro(attacker: Unit, defender: Unit, onComplete: () => void, isCurrent: () => boolean = () => true): void {
   if (!settingsState.animationsEnabled) {
     onComplete();
     return;
@@ -799,6 +809,12 @@ function playCombatIntro(attacker: Unit, defender: Unit, onComplete: () => void)
   const startTime = performance.now();
   let fanfarePlayed = false;
   const step = (now: number) => {
+    if (!isCurrent()) {
+      renderer.clearCombatPresentation();
+      combatIntroActive = false;
+      onComplete();
+      return;
+    }
     const elapsed = now - startTime;
     const camera = ease(elapsed / 900);
     renderer.centerOnWorld(
@@ -931,11 +947,13 @@ function isOpponentsTurn(): boolean {
   return online !== null && game.getState().currentPlayer !== online.myPlayer;
 }
 
-function sendOnlineState(): void {
+function sendOnlineState(combat?: NonNullable<OnlineReplay["combat"]>): void {
   if (!online) {
     return;
   }
-  online.session.send({ kind: "state", state: game.serializeState() });
+  const movements = game.getState().units.flatMap((unit, index) =>
+    unit.animationPath.length > 0 ? [{ index, start: { ...unit.pos }, path: unit.animationPath.map(pos => ({ ...pos })) }] : []);
+  online.session.send({ kind: "state", state: game.serializeState(), replay: { movements, ...(combat ? { combat } : {}) } });
 }
 
 function updateOnlineHud(): void {
@@ -1076,7 +1094,71 @@ function handleOnlineClosed(reason: CloseReason): void {
   });
 }
 
-function applyRemoteState(state: unknown): void {
+function enqueueRemoteMessage(message: GameMessage): void {
+  const connection = online;
+  if (!connection || !isPlausibleGameState(message.state)) return;
+  remotePlaybackActive = true;
+  remoteMessages = remoteMessages.catch(() => undefined).then(async () => {
+    if (online !== connection) return;
+    const replay = message.replay;
+    const state = message.state as SavedGameState;
+    const combat = replay?.combat;
+    if (combat && isPlausibleGameState(combat.before) && isValidRemoteCombat(combat.preview)) {
+      applyRemoteState(combat.before, false);
+      const attacker = game.getUnitAt(combat.preview.attackerPos);
+      const defender = game.getUnitAt(combat.preview.defenderPos);
+      if (attacker && defender) {
+        game.setCombatOverlay(combat.preview.attackerPos, combat.preview.defenderPos);
+        await new Promise<void>(resolve => playCombatIntro(attacker, defender, resolve, () => online === connection));
+        if (online !== connection) return;
+        if (appRoot) {
+          await new Promise<void>(resolve => showCombatDialog(appRoot, attacker, defender, combat.preview, { onOk: resolve }));
+        }
+        if (online !== connection) return;
+        renderer.clearCombatPresentation();
+        if (state.units.length < combat.before.units.length) fxAudio.playUnitDestroyed();
+      }
+    } else {
+      applyRemoteState(state, false);
+      if (Array.isArray(replay?.movements) && replay.movements.length <= state.units.length) {
+        const units = game.getState().units;
+        for (const movement of replay.movements) {
+          if (!movement || !Number.isInteger(movement.index)) continue;
+          const unit = units[movement.index];
+          if (!unit || unit.owner === connection.myPlayer || !isReplayPosition(movement.start) ||
+              !Array.isArray(movement.path) || movement.path.length > 10000 || !movement.path.every(isReplayPosition)) continue;
+          unit.pos = { ...movement.start };
+          unit.animationPath = movement.path.map(pos => ({ ...pos }));
+        }
+        await playAiTurn([], connection.myPlayer === 0 ? 1 : 0, () => online === connection);
+      }
+    }
+    if (online === connection) applyRemoteState(state);
+  }).catch(error => {
+    console.error("Failed to replay the opponent's action.", error);
+    if (online === connection) applyRemoteState(message.state);
+  }).finally(() => {
+    // A newer queued action keeps input blocked until its playback completes.
+    pendingRemoteMessages--;
+    remotePlaybackActive = pendingRemoteMessages > 0;
+  });
+  pendingRemoteMessages++;
+}
+
+function isReplayPosition(value: unknown): value is { q: number; r: number } {
+  if (!value || typeof value !== "object") return false;
+  const pos = value as { q: number; r: number };
+  return Number.isFinite(pos.q) && Number.isFinite(pos.r) && Math.abs(pos.q) <= 1000 && Math.abs(pos.r) <= 1000;
+}
+
+function isValidRemoteCombat(value: unknown): value is CombatPreview {
+  if (!value || typeof value !== "object") return false;
+  const preview = value as CombatPreview;
+  return isReplayPosition(preview.attackerPos) && isReplayPosition(preview.defenderPos) &&
+    Object.values(preview).every(item => typeof item !== "number" || Number.isFinite(item));
+}
+
+function applyRemoteState(state: unknown, showWinner = true): void {
   if (!online) {
     return;
   }
@@ -1099,7 +1181,7 @@ function applyRemoteState(state: unknown): void {
   renderAll();
 
   const current = game.getState();
-  if (current.gameOver && current.winner !== null) {
+  if (showWinner && current.gameOver && current.winner !== null) {
     openWinDialog(current.winner);
   }
 }
@@ -1147,7 +1229,7 @@ async function startOnlineHost(initialState: SavedGameState): Promise<void> {
         online.peerConnected = false;
         renderAll();
       },
-      onGameMessage: (message) => applyRemoteState(message.state),
+      onGameMessage: enqueueRemoteMessage,
       onClosed: handleOnlineClosed,
     });
   } catch (error) {
@@ -1205,7 +1287,7 @@ async function joinOnlineGame(room: string): Promise<void> {
   let session: OnlineSession;
   try {
     session = await OnlineSession.joinRoom(getRelayUrl(window.location), room, {
-      onGameMessage: (message) => applyRemoteState(message.state),
+      onGameMessage: enqueueRemoteMessage,
       onClosed: handleOnlineClosed,
     });
   } catch (error) {

@@ -63,6 +63,23 @@ describe("relay server and online session", () => {
     assert.deepEqual(hostReceived[0], stateMessage("from guest"));
   });
 
+  it("forwards individual animation steps and the final turn state in order", async () => {
+    const received: GameMessage[] = [];
+    const { session: host, room } = await OnlineSession.createRoom(url, {});
+    track(host);
+    track(await OnlineSession.joinRoom(url, room, { onGameMessage: message => received.push(message) }));
+    const game = new GameCore(10, 10, createSeededRng(12));
+    const movement: GameMessage = {
+      kind: "state", state: game.serializeState(),
+      replay: { movements: [{ index: 0, start: { q: 1, r: 1 }, path: [{ q: 2, r: 1 }, { q: 3, r: 1 }] }] },
+    };
+    const endTurn: GameMessage = { kind: "state", state: game.serializeState(), replay: { movements: [] } };
+    host.send(movement);
+    host.send(endTurn);
+    await wait(() => received.length === 2);
+    assert.deepEqual(received, [movement, endTurn]);
+  });
+
   it("rejects an unknown room", async () => {
     await assert.rejects(OnlineSession.joinRoom(url, "doesnotexist", {}), (error: unknown) => {
       return error instanceof RelayRequestError && error.reason === "room-not-found";

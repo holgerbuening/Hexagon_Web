@@ -18,6 +18,11 @@ export type ServerMessage =
   | { type: "error"; reason: RelayError };
 
 // Payloads the players send to each other through the relay.
-export type GameMessage = { kind: "state"; state: unknown };
+export type OnlineReplay = {
+  movements: { index: number; start: import("../core/types").Axial; path: import("../core/types").Axial[] }[];
+  combat?: { before: import("../core/types").SavedGameState; preview: import("../core/types").CombatPreview };
+};
+
+export type GameMessage = { kind: "state"; state: unknown; replay?: OnlineReplay };
 
 export const ROOM_ID_PATTERN = /^[A-Za-z0-9_-]{6,32}$/;
