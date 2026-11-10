@@ -108,6 +108,7 @@ export class AiSystem {
   private aiPlayer: PlayerId | null = 1;
   private profile: AiProfile = aiProfiles.normal;
   // Expected damage already assigned to enemy units in the current AI turn (focus fire, no overkill).
+  public purchaseHeadquarters: Axial[] = [];
   private plannedDamage = new Map<Unit, number>();
   // Path cost to a target tile, cached per target because costs do not depend on the unit.
   private costFieldCache = new Map<string, Map<string, number>>();
@@ -144,6 +145,7 @@ export class AiSystem {
     spend: Spend
     ): CombatPreviewEntry[] {
     if (!this.shouldRun(state)) return [];
+    this.purchaseHeadquarters = [];
     const combatPreviews: CombatPreviewEntry[] = [];
     const attackingUnits = new Set<Unit>();
     this.plannedDamage.clear();
@@ -257,6 +259,7 @@ export class AiSystem {
           unit.roadBuildPath = this.planEngineerRoadPath(state, unit, getNeighbors);
         }
         state.units.push(unit);
+        this.purchaseHeadquarters.push({ q: hq.q, r: hq.r });
       }
     }
   }
@@ -403,6 +406,7 @@ export class AiSystem {
           unit.roadBuildPath = this.planEngineerRoadPath(state, unit, getNeighbors);
         }
         state.units.push(unit);
+        this.purchaseHeadquarters.push({ q: hq.q, r: hq.r });
         break;
       }
     }

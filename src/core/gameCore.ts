@@ -74,8 +74,12 @@ export class GameCore {
     return this.animationSystem.hasActiveUnitAnimations(this.state.units);
   }
 
-  public advanceUnitAnimations(deltaSeconds: number): boolean {
-    return this.animationSystem.advanceUnitAnimations(this.state.units, deltaSeconds);
+  public getAiPurchaseHeadquarters(): Axial[] {
+    return this.aiSystem.purchaseHeadquarters.map(pos => ({ ...pos }));
+  }
+
+  public advanceUnitAnimations(deltaSeconds: number, units: Unit[] = this.state.units): boolean {
+    return this.animationSystem.advanceUnitAnimations(units, deltaSeconds);
   }
 
   public configureAnimations(animationSpeed: number, animationsEnabled: boolean): void {
@@ -153,6 +157,7 @@ export class GameCore {
       if (this.state.gameOver) {
         return [];
       }
+      this.aiSystem.purchaseHeadquarters = [];
       return this.endTurnInternal(true);
   }
 

@@ -31,7 +31,8 @@ renderer.setInvalidateHandler(renderAll);
 const AI_PLAYER_ID: PlayerId = 1;
 const UNIT_ANIMATION_EPSILON = 0.001;
 let combatIntroActive = false;
-const centeredAiUnits = new Set<Unit>();
+let aiPlaybackActive = false;
+let aiPlaybackUnit: Unit | null = null;
 
 // HUD elements
 const hudTurn = document.getElementById("hudTurn") as HTMLSpanElement;
@@ -121,9 +122,7 @@ if (hudEndTurn) {
     const aiPreviews = game.endTurn();
     sendOnlineState();
     renderAll();
-    if (aiPreviews.length > 0) {
-      showAiCombatDialogs(aiPreviews);
-    }
+    void playAiTurn(aiPreviews);
   });
 }
 
@@ -143,7 +142,7 @@ let touchStartedInCanvas = false;
 
 // If mouse moved more than this, treat as drag
 const DRAG_THRESHOLD_PX = 3;
-const isInputBlocked = (): boolean => combatIntroActive || !!document.querySelector(".dialog-overlay") || (!mapEditor && game.hasActiveUnitAnimations());
+const isInputBlocked = (): boolean => aiPlaybackActive || combatIntroActive || !!document.querySelector(".dialog-overlay") || (!mapEditor && game.hasActiveUnitAnimations());
 
 // --- Keyboard control state ---
 let panLeft = false;
@@ -621,15 +620,11 @@ function animationLoop(timeMs: number): void {
   lastFrameTimeMs = timeMs;
 
   let didChange = false;
-  const didFocusAiMovement = !mapEditor && !combatIntroActive && focusOnAiMoveStart();
-  if (didFocusAiMovement) {
-    didChange = true;
-  }
-  const didAnimateUnits = !mapEditor && game.advanceUnitAnimations(dt);
+  const didAnimateUnits = !mapEditor && !aiPlaybackActive && game.advanceUnitAnimations(dt);
   if (didAnimateUnits) {
     didChange = true;
   }
-  movementAudio.update(mapEditor ? [] : game.getState().units);
+  movementAudio.update(mapEditor ? [] : aiPlaybackActive ? (aiPlaybackUnit ? [aiPlaybackUnit] : []) : game.getState().units);
 
   // Pan movement
   let dx = 0;
@@ -686,33 +681,65 @@ function animationLoop(timeMs: number): void {
   requestAnimationFrame(animationLoop);
 }
 
-function focusOnAiMoveStart(): boolean {
-  const state = game.getState();
-  let didFocus = false;
-
-  for (const unit of state.units) {
-    const atTarget =
-      Math.abs(unit.pos.q - unit.q) <= UNIT_ANIMATION_EPSILON &&
-      Math.abs(unit.pos.r - unit.r) <= UNIT_ANIMATION_EPSILON;
-    if (atTarget && centeredAiUnits.has(unit)) {
-      centeredAiUnits.delete(unit);
+async function playAiTurn(previews: CombatPreviewEntry[]): Promise<void> {
+  if (settingsState.animationsEnabled) {
+    aiPlaybackActive = true;
+    const moveCamera = (q: number, r: number, duration = 650): Promise<void> => {
+      const start = renderer.getCameraCenter();
+      const target = axialToPixel(q, r, renderer.getHexSize());
+      const started = performance.now();
+      return new Promise(resolve => {
+        const step = (now: number) => {
+          const t = Math.min((now - started) / duration, 1);
+          const eased = t * t * (3 - 2 * t);
+          renderer.centerOnWorld(start.x + (target.x - start.x) * eased, start.y + (target.y - start.y) * eased);
+          renderAll();
+          if (t < 1) requestAnimationFrame(step);
+          else resolve();
+        };
+        requestAnimationFrame(step);
+      });
+    };
+    try {
+      // Purchases happen before troop movements; show each purchasing HQ once.
+      const shownHeadquarters = new Set<string>();
+      for (const hq of game.getAiPurchaseHeadquarters()) {
+        const key = `${hq.q},${hq.r}`;
+        if (shownHeadquarters.has(key)) continue;
+        shownHeadquarters.add(key);
+        await moveCamera(hq.q, hq.r);
+        await new Promise<void>(resolve => window.setTimeout(resolve, 450));
+      }
+      const movingUnits = game.getState().units.filter(unit =>
+        unit.owner === AI_PLAYER_ID && (unit.animationPath.length > 0 ||
+          Math.abs(unit.pos.q - unit.q) > UNIT_ANIMATION_EPSILON ||
+          Math.abs(unit.pos.r - unit.r) > UNIT_ANIMATION_EPSILON));
+      for (const unit of movingUnits) {
+        await moveCamera(unit.pos.q, unit.pos.r);
+        aiPlaybackUnit = unit;
+        await new Promise<void>(resolve => {
+          let previous = performance.now();
+          const step = (now: number) => {
+            game.advanceUnitAnimations(Math.min((now - previous) / 1000, 0.1), [unit]);
+            previous = now;
+            renderer.centerOnAxial(unit.pos.q, unit.pos.r);
+            renderAll();
+            if (unit.animationPath.length > 0 ||
+                Math.abs(unit.pos.q - unit.q) > UNIT_ANIMATION_EPSILON ||
+                Math.abs(unit.pos.r - unit.r) > UNIT_ANIMATION_EPSILON) {
+              requestAnimationFrame(step);
+            } else resolve();
+          };
+          requestAnimationFrame(step);
+        });
+        aiPlaybackUnit = null;
+      }
+    } finally {
+      aiPlaybackUnit = null;
+      aiPlaybackActive = false;
     }
   }
-
-  for (const unit of state.units) {
-    if (unit.owner !== AI_PLAYER_ID) {
-      continue;
-    }
-
-    if (unit.animationPath.length > 0 && !centeredAiUnits.has(unit)) {
-      renderer.centerOnAxial(unit.pos.q, unit.pos.r);
-      centeredAiUnits.add(unit);
-      didFocus = true;
-      break;
-    }
-  }
-
-  return didFocus;
+  if (previews.length > 0) showAiCombatDialogs(previews);
 }
 
 function combatDialog(preview: CombatPreview): void {
