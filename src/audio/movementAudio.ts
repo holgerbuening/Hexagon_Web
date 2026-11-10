@@ -140,11 +140,13 @@ export class MovementAudioController {
   private enabled: boolean;
   private volume: number;
   private readonly unitDestroyedAudio: HTMLAudioElement;
+  private readonly fanfareAudio: HTMLAudioElement;
 
   constructor(config: FxAudioConfig) {
     this.enabled = config.enabled;
     this.volume = this.clampVolume(config.volume);
     this.unitDestroyedAudio = new Audio("/sounds/blop.ogg");
+    this.fanfareAudio = new Audio("/sounds/fanfare.ogg");
     this.applyVolume();
   }
 
@@ -165,8 +167,17 @@ export class MovementAudioController {
     void this.unitDestroyedAudio.play().catch(() => undefined);
   }
 
+  public playFanfare(): void {
+    if (!this.enabled) {
+      return;
+    }
+    this.fanfareAudio.currentTime = 0;
+    void this.fanfareAudio.play().catch(() => undefined);
+  }
+
   private applyVolume(): void {
     this.unitDestroyedAudio.volume = this.volume;
+    this.fanfareAudio.volume = this.volume;
   }
 
   private clampVolume(volume: number): number {

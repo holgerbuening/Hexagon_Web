@@ -770,6 +770,7 @@ function playCombatIntro(attacker: Unit, defender: Unit, onComplete: () => void)
     return clamped * clamped * (3 - 2 * clamped);
   };
   const startTime = performance.now();
+  let fanfarePlayed = false;
   const step = (now: number) => {
     const elapsed = now - startTime;
     const camera = ease(elapsed / 900);
@@ -780,6 +781,10 @@ function playCombatIntro(attacker: Unit, defender: Unit, onComplete: () => void)
     const attackerScale = 1 + ease((elapsed - 900) / 700);
     const defenderScale = 1 + ease((elapsed - 1600) / 700);
     const movement = approach * ease((elapsed - 2300) / 550);
+    if (elapsed >= 2300 && !fanfarePlayed) {
+      fanfarePlayed = true;
+      fxAudio.playFanfare();
+    }
     renderer.setCombatPresentation(attacker, attackerScale, deltaQ * movement, deltaR * movement);
     renderer.setCombatPresentation(defender, defenderScale, -deltaQ * movement, -deltaR * movement);
     renderAll();
