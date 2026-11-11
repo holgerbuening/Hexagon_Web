@@ -99,6 +99,6 @@ Der bisherige einfache Karteneditor des Spiels bleibt davon unabhängig bestehen
 Das Studio hat keine Anmeldung und benötigt lokal auch keine. Falls es später
 im Netz bereitgestellt wird, braucht es einen geschützten Serverzugang.
 
-Die Kampagnendateien sind die Grundlage für den nächsten Entwicklungsschritt.
-Kampagnenauswahl, Briefinganzeige im normalen Spiel, Fortschritt und automatisches
-Weiterschalten nach einem Sieg sind noch nicht Teil dieser Autorenanwendung.
+Exportierte Kampagnen können jetzt im normalen Spiel über **Campaigns** gespielt
+werden. Ablage der JSON-Dateien, Katalog und Bildpfade sind unter
+[Kampagnen veröffentlichen und spielen](KAMPAGNEN.md) beschrieben.

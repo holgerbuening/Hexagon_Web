@@ -786,3 +786,22 @@ canvas:active {
 }
 .new-game-dialog .start-dialog-text:empty { display: none; }
 .new-game-dialog > * { flex-shrink: 0; }
+
+.campaign-overlay { padding: 20px; box-sizing: border-box; }
+.campaign-dialog { width: min(760px, 100%); max-height: 90vh; overflow: auto; background: #18261e; color: #ecebdc; border: 2px solid #aaa54f; border-radius: 12px; box-shadow: 0 12px 60px #0009; }
+.campaign-content { padding: 24px; }
+.campaign-content h2 { margin-top: 0; }
+.campaign-image { display: block; width: 100%; max-height: 320px; object-fit: contain; background: #101811; }
+.campaign-story { white-space: pre-wrap; line-height: 1.65; overflow-wrap: anywhere; }
+.campaign-subtitle { color: #d4c587; font-size: 13px; }
+.campaign-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+.campaign-list { display: grid; gap: 18px; }
+.campaign-card { border: 1px solid #7d8854; border-radius: 8px; padding: 18px; }
+.campaign-card > img { width: 100%; max-height: 180px; object-fit: contain; }
+.campaign-card p { white-space: pre-wrap; }
+.campaign-mission { display: block; width: 100%; padding: 12px; margin-top: 10px; text-align: left; background: #2b3e2e; color: #ededdc; border: 1px solid #7d8854; border-radius: 5px; cursor: pointer; }
+.campaign-mission:disabled { opacity: .45; cursor: default; }
+.hudCampaign { color: #dfce8a; font-size: 12px; max-width: 250px; }
+/* Keep the expanded main menu usable on shorter screens. */
+.start-dialog-overlay .start-dialog { box-sizing: border-box; min-height: 0; max-height: 94vh; overflow-y: auto; justify-content: flex-start; gap: 14px; padding: 28px 24px; }
+.start-dialog-overlay .start-dialog > * { flex-shrink: 0; }

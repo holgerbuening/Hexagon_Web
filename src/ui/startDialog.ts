@@ -1,5 +1,6 @@
 type StartDialogOptions = {
   onStartNew: () => void;
+  onCampaigns: () => void;
   onOpenEditor: () => void;
   onResume: () => void;
   onSave: () => void;
@@ -45,6 +46,12 @@ export function showStartDialog(appRoot: HTMLElement, options: StartDialogOption
     overlay.remove();
     options.onStartNew();
   });
+
+  const campaignButton = document.createElement("button");
+  campaignButton.className = "start-dialog-button";
+  campaignButton.type = "button";
+  campaignButton.textContent = "Campaigns";
+  campaignButton.addEventListener("click", () => { overlay.remove(); options.onCampaigns(); });
 
   const settingsButton = document.createElement("button");
   settingsButton.className = "start-dialog-button";
@@ -94,7 +101,7 @@ export function showStartDialog(appRoot: HTMLElement, options: StartDialogOption
     options.onOpenEditor();
   });
 
-  dialog.append(title, editorButton, resumeButton, startButton, settingsButton, aboutButton, saveButton, loadButton);
+  dialog.append(title, editorButton, resumeButton, startButton, campaignButton, settingsButton, aboutButton, saveButton, loadButton);
   overlay.appendChild(dialog);
   appRoot.appendChild(overlay);
 }

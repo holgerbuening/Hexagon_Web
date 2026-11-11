@@ -253,3 +253,10 @@ Missionseditor und Kampagnenverwaltung lokal mit `npm run dev:editor` starten
 und `http://127.0.0.1:5174/author/index.html` öffnen. Die Autorenwerkzeuge
 werden separat nach `dist-author/` gebaut und sind nicht Teil des normalen
 Spielbuilds. Anleitung: [Autorenstudio](docs/AUTORENSTUDIO.md).
+
+## Kampagnen spielen
+
+Im Hauptmenü **Campaigns** wählen. Exportierte Kampagnen können direkt geladen
+oder unter `public/campaigns/` veröffentlicht und in `public/campaigns/index.json`
+eingetragen werden. Bilder aus dem Autorenstudio sind bereits eingebettet.
+Anleitung und Bildpfade: [Kampagnen](docs/KAMPAGNEN.md).

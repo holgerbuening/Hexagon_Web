@@ -13,6 +13,7 @@ type SettingsDialogOptions = {
   initialState: SettingsState;
   onApply: (state: SettingsState) => void;
   onCancel: () => void;
+  difficultyLocked?: boolean;
 };
 
 export function showSettingsDialog(appRoot: HTMLElement, options: SettingsDialogOptions): void {
@@ -61,6 +62,10 @@ export function showSettingsDialog(appRoot: HTMLElement, options: SettingsDialog
   const difficultySelect = document.createElement("select");
   difficultySelect.className = "settings-select";
   difficultySelect.id = "ai-difficulty-select";
+  if (options.difficultyLocked) {
+    difficultySelect.disabled = true;
+    difficultyLabel.textContent = "AI Difficulty (set by mission)";
+  }
 
   const difficulties: Array<{ label: string; value: AiDifficulty }> = [
     { label: "Easy", value: "easy" },

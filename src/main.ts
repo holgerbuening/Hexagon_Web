@@ -1,3 +1,6 @@
+import { showCampaignLibrary, showCampaignStory } from "./ui/campaignDialog";
+import { clone, type CampaignDocument } from "./core/campaigns/documents";
+import { createCampaignSave, parseCampaignSave, readCampaignProgress, writeCampaignProgress, finishCampaignMission, type CampaignSave } from "./core/campaigns/runtime";
 import { consumeGameLaunch } from "./gameLaunch";
 import { MapEditor } from "./core/map/mapEditor";
 import { type MapDocument, serializeMapDocument } from "./core/map/mapSerializer";
@@ -89,6 +92,13 @@ interface OnlineGame {
   inviteDialog: InviteDialogHandle | null;
 }
 let online: OnlineGame | null = null;
+let activeCampaign: CampaignSave | null = null;
+let pendingCampaignCombats: CombatPreviewEntry[] = [];
+let campaignStorageWarning = "";
+const campaignStorage = {
+  getItem: (key: string) => localStorage.getItem(key),
+  setItem: (key: string, value: string) => localStorage.setItem(key, value),
+};
 // Incremented whenever a pending connection attempt is cancelled.
 let onlineAttempt = 0;
 
@@ -134,6 +144,7 @@ if (hudEndTurn) {
       return;
     }
     const aiPreviews = game.endTurn();
+    if (activeCampaign) pendingCampaignCombats = [...aiPreviews];
     sendOnlineState();
     renderAll();
     void playAiTurn(aiPreviews);
@@ -470,6 +481,15 @@ function updateHud(): void {
     : PLAYER_NAMES[state.currentPlayer];
   hudBalance.textContent = String(state.playerBalances[state.currentPlayer] ?? 0);
   updateOnlineHud();
+  let campaignHud = document.getElementById("hudCampaign");
+  if (!campaignHud && hudOnline?.parentElement) {
+    campaignHud = document.createElement("div"); campaignHud.id = "hudCampaign"; campaignHud.className = "hudCampaign";
+    hudOnline.parentElement.append(campaignHud);
+  }
+  if (campaignHud) {
+    const index = activeCampaign?.campaign.missions.findIndex(m => m.id === activeCampaign?.missionId) ?? -1;
+    campaignHud.textContent = activeCampaign ? `${activeCampaign.campaign.title} · Mission ${index + 1}/${activeCampaign.campaign.missions.length}${campaignStorageWarning ? " · Progress not saved — use Save Game" : ""}` : "";
+  }
 
   if (hudFlag) {
     // English comment: Update flag image based on current player id
@@ -876,6 +896,8 @@ function showAiCombatDialogs(previews: CombatPreviewEntry[]): void {
         onOk: () => {
           renderer.clearCombatPresentation();
           const destroyedUnits = game.applyCombat(entry.preview);
+          if (activeCampaign) pendingCampaignCombats.shift();
+          checkpointCampaign();
           if (destroyedUnits > 0) {
             fxAudio.playUnitDestroyed();
           }
@@ -922,6 +944,7 @@ function openStartDialog(): void {
 
   showStartDialog(appRoot, {
     onOpenEditor: openMapEditor,
+    onCampaigns: openCampaigns,
     resumeEnabled: !game.getState().gameOver,
     onResume: () => {
       applyFullscreenPreference();
@@ -950,7 +973,8 @@ function openStartDialog(): void {
 
 function applyAiConfiguration(): void {
   // In an online game both players are people.
-  game.configureAi(online ? null : AI_PLAYER_ID, aiProfiles[settingsState.aiDifficulty]);
+  const mission = activeCampaign?.campaign.missions.find(m => m.id === activeCampaign?.missionId);
+  game.configureAi(online ? null : AI_PLAYER_ID, aiProfiles[mission?.difficulty ?? settingsState.aiDifficulty]);
 }
 
 function isOpponentsTurn(): boolean {
@@ -958,6 +982,7 @@ function isOpponentsTurn(): boolean {
 }
 
 function sendOnlineState(combat?: NonNullable<OnlineReplay["combat"]>): void {
+  checkpointCampaign();
   if (!online) {
     return;
   }
@@ -1037,6 +1062,7 @@ function openGameModeDialog(): void {
   showGameModeDialog(appRoot, {
     onSinglePlayer: (map) => {
       const state = prepareFreshGame(map);
+      activeCampaign = null;
       leaveOnline();
       game.loadState(state);
       showFreshMap();
@@ -1212,6 +1238,7 @@ function showConnectingDialog(text: string): { close: () => void } | null {
 }
 
 async function startOnlineHost(initialState: SavedGameState): Promise<void> {
+  activeCampaign = null;
   if (!appRoot) {
     return;
   }
@@ -1287,6 +1314,7 @@ async function startOnlineHost(initialState: SavedGameState): Promise<void> {
 }
 
 async function joinOnlineGame(room: string): Promise<void> {
+  activeCampaign = null;
   if (!appRoot) {
     return;
   }
@@ -1352,6 +1380,7 @@ function openSettingsDialog(): void {
 
   showSettingsDialog(appRoot, {
     initialState: settingsState,
+    difficultyLocked: activeCampaign !== null,
     onApply: (nextState) => {
       settingsState = nextState;
       applyAiConfiguration();
@@ -1368,7 +1397,85 @@ function openSettingsDialog(): void {
   });
 }
 
+function checkpointCampaign(): void {
+  if (!activeCampaign || online) return;
+  activeCampaign.state = game.serializeState();
+  activeCampaign.pendingCombats = clone(pendingCampaignCombats);
+  if (!writeCampaignProgress(activeCampaign, campaignStorage)) {
+    campaignStorageWarning = "Browser storage is full or unavailable. Use Save Game to keep your campaign progress in a file.";
+  } else campaignStorageWarning = "";
+}
+
+function openCampaigns(): void {
+  if (!appRoot) return;
+  showCampaignLibrary(appRoot, { storage: campaignStorage, warning: campaignStorageWarning,
+    onStart: (campaign, index) => {
+      const briefing = () => showMissionBriefing(campaign, index);
+      if (index === 0 && campaign.introduction) {
+        showCampaignStory(appRoot, { title: campaign.title, text: campaign.introduction, image: campaign.image,
+          actions: [{ label: "Continue", onClick: briefing }, { label: "Back", onClick: openCampaigns }] });
+      } else briefing();
+    },
+    onResume: resumeCampaign, onBack: openStartDialog,
+  });
+}
+
+function showMissionBriefing(campaign: CampaignDocument, index: number): void {
+  if (!appRoot) return;
+  const mission = campaign.missions[index]; if (!mission) return;
+  showCampaignStory(appRoot, { title: mission.title, text: mission.briefing || "Destroy the enemy headquarters to complete this mission.",
+    image: mission.image, subtitle: `${campaign.title} · Mission ${index + 1} / ${campaign.missions.length} · ${{ easy: "Easy", normal: "Normal", hard: "Hard" }[mission.difficulty]}`,
+    actions: [{ label: "Start mission", onClick: () => {
+      const progress = readCampaignProgress(campaign, campaignStorage);
+      resumeCampaign(createCampaignSave(campaign, index, progress.completedMissionIds));
+    } }, { label: "Back", onClick: openCampaigns }] });
+}
+
+function resumeCampaign(save: CampaignSave): void {
+  const restored = parseCampaignSave(save);
+  leaveOnline();
+  activeCampaign = restored;
+  pendingCampaignCombats = clone(restored.pendingCombats ?? []);
+  const mission = restored.campaign.missions.find(m => m.id === restored.missionId)!;
+  settingsState.aiDifficulty = mission.difficulty;
+  game.loadState(clone(restored.state));
+  applyAiConfiguration();
+  showFreshMap();
+  checkpointCampaign();
+  renderAll();
+  if (restored.state.gameOver && restored.state.winner !== null && restored.state.winner !== undefined) {
+    showCampaignOutcome(restored.state.winner);
+  } else if (pendingCampaignCombats.length) {
+    showAiCombatDialogs([...pendingCampaignCombats]);
+  } else if (campaignStorageWarning && appRoot) {
+    showNoticeDialog(appRoot, { title: "Campaign progress", text: campaignStorageWarning, onOk: () => {} });
+  }
+}
+
+function showCampaignOutcome(winner: PlayerId): void {
+  if (!activeCampaign || !appRoot) return;
+  const save = activeCampaign;
+  const campaign = save.campaign;
+  const index = campaign.missions.findIndex(m => m.id === save.missionId);
+  const mission = campaign.missions[index]!;
+  const next = finishCampaignMission(save, winner);
+  checkpointCampaign();
+  showCampaignStory(appRoot, { title: winner === 0 ? "Mission accomplished!" : "Mission failed",
+    text: (winner === 0 ? mission.victoryText : mission.defeatText) || (winner === 0 ? "Victory!" : "Try again."),
+    image: mission.image, subtitle: `${campaign.title} · ${mission.title}`,
+    actions: [{ label: winner === 0 ? (next === null ? "Complete campaign" : "Next mission") : "Retry mission", onClick: () => {
+      if (winner !== 0) showMissionBriefing(campaign, index);
+      else if (next !== null) showMissionBriefing(campaign, next);
+      else showCampaignStory(appRoot, { title: "Campaign completed!", text: campaign.completionText || "You have completed every mission. Congratulations!",
+        image: campaign.image, subtitle: campaign.title, actions: [{ label: "Campaigns", onClick: openCampaigns }, { label: "Main menu", onClick: openStartDialog }] });
+    } }, { label: "Main menu", onClick: openStartDialog }] });
+}
+
 function openWinDialog(winner: PlayerId): void {
+  if (activeCampaign && !online) {
+    showCampaignOutcome(winner);
+    return;
+  }
   if (!appRoot) {
     return;
   }
@@ -1381,7 +1488,8 @@ function openWinDialog(winner: PlayerId): void {
 }
 
 function saveGameToFile(): void {
-  const saveData = game.serializeState();
+  checkpointCampaign();
+  const saveData = activeCampaign ?? game.serializeState();
   const json = JSON.stringify(saveData, null, 2);
   const blob = new Blob([json], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -1411,13 +1519,19 @@ function loadGameFromFile(onSelected?: () => void): void {
       }
       try {
         const parsed = JSON.parse(reader.result);
-        game.loadState(parsed);
-        leaveOnline();
-        applyAiConfiguration();
-        renderAll();
+        if (parsed?.format === "hexagon-campaign-save") {
+          resumeCampaign(parseCampaignSave(parsed));
+        } else {
+          game.loadState(parsed);
+          activeCampaign = null;
+          leaveOnline();
+          applyAiConfiguration();
+          showFreshMap();
+          renderAll();
+        }
       } catch (error) {
         console.error("Failed to load save game.", error);
-        window.alert("Save Game konnte nicht geladen werden.");
+        window.alert("Could not load the saved game.");
       }
     };
     reader.readAsText(file);
