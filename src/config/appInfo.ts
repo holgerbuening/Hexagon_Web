@@ -12,8 +12,8 @@ export type CreditItem = {
 export const APP_INFO = {
   name: "Hexagon (Web Edition)",
   tagline: "Turn-based hex strategy in the browser",
-  version: "0.1.3",
-  build: "2026-02-15",
+  version: "0.3.0",
+  build: "2026-11-11",
   shortDescription:
     "Hexagon is a turn-based strategy game running directly in your browser. It features procedural hex map generation, unit-based tactical combat, and an evolving UI designed for quick, readable battlefield decisions.",
   developer: "Developed by Holger Büning",
