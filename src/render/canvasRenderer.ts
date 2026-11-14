@@ -54,6 +54,7 @@ export class CanvasRenderer {
   private tileImages: Map<FieldType, HTMLImageElement>;
   private tileImagesLoaded: boolean;
   private roadImages: Map<string, HTMLImageElement>;
+  private trenchImages = new Map<string, HTMLImageElement>();
 
   // Unit, flag, and rank image storage
   private unitImages: Map<string, HTMLImageElement>;
@@ -83,6 +84,7 @@ export class CanvasRenderer {
     this.invalidateHandler = null;
     this.loadTileImages();
     this.loadRoadImages();
+    this.loadTrenchImages();
     this.unitImages = new Map<string, HTMLImageElement>();
     this.loadUnitSprites();
   }
@@ -97,7 +99,8 @@ export class CanvasRenderer {
       const isSelected = tileMatches(state.selectedHex, tile);
       this.drawTile(tile, isSelected);
     }
-    this.drawRoads(state);
+    this.drawConnectedStructures(state, tile => tile.hasRoad, this.roadImages);
+    this.drawConnectedStructures(state, tile => !!tile.hasTrench, this.trenchImages);
     // Draw movement overlay (yellow) BEFORE selected overlay (green)
     const keys = Object.keys(state.reachableTiles);
     for (const k of keys) {
@@ -255,8 +258,8 @@ export class CanvasRenderer {
     }
   }
 
-  private drawRoads(state: Readonly<GameState>): void {
-    const roadTiles = state.tiles.filter((tile) => tile.hasRoad);
+  private drawConnectedStructures(state: Readonly<GameState>, hasStructure: (tile: HexTile) => boolean, images: Map<string, HTMLImageElement>): void {
+    const roadTiles = state.tiles.filter(hasStructure);
     if (roadTiles.length === 0) return;
 
     const roadKeys = new Set(roadTiles.map((tile) => MovementKey(tile.q, tile.r)));
@@ -271,18 +274,18 @@ export class CanvasRenderer {
 
     for (const tile of roadTiles) {
       const p = axialToPixel(tile.q, tile.r, this.size);
-      this.drawRoadImage("center", p.x, p.y);
+      this.drawStructureImage(images, "center", p.x, p.y);
 
       for (const dir of directions) {
         const neighborKey = MovementKey(tile.q + dir.dq, tile.r + dir.dr);
         if (!roadKeys.has(neighborKey)) continue;
-        this.drawRoadImage(String(dir.index), p.x, p.y);
+        this.drawStructureImage(images, String(dir.index), p.x, p.y);
       }
     }
   }
 
-  private drawRoadImage(key: string, x: number, y: number): void {
-    const img = this.roadImages.get(key);
+  private drawStructureImage(images: Map<string, HTMLImageElement>, key: string, x: number, y: number): void {
+    const img = images.get(key);
     if (!img || !img.complete || img.naturalWidth === 0) return;
 
     const scale = 1.1;
@@ -458,6 +461,11 @@ export class CanvasRenderer {
     }
   }
 
+  private loadTrenchImages(): void {
+    this.addStructureImage(this.trenchImages, "center", "/images/trenchs/trenchcenter.png");
+    for (let i = 0; i < 6; i++) this.addStructureImage(this.trenchImages, String(i), `/images/trenchs/trench${i}.png`);
+  }
+
   private addTileImage(field: FieldType, url: string): void {
     const img = new Image();
 
@@ -469,11 +477,15 @@ export class CanvasRenderer {
     this.tileImages.set(field, img);
   }
   private addRoadImage(key: string, url: string): void {
+    this.addStructureImage(this.roadImages, key, url);
+  }
+
+  private addStructureImage(images: Map<string, HTMLImageElement>, key: string, url: string): void {
     const img = new Image();
     img.onload = this.handleAssetLoaded.bind(this);
     img.onerror = this.handleAssetLoaded.bind(this);
     img.src = url;
-    this.roadImages.set(key, img);
+    images.set(key, img);
   }
 
   private loadUnitSprites(): void {

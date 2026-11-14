@@ -20,6 +20,7 @@ export interface HexTile extends Axial {
   col: number
   row: number
   hasRoad: boolean;
+  hasTrench?: boolean;
 }
 
 export interface GameState {
@@ -103,7 +104,10 @@ export type CombatPreviewEntry = {
   defender: SavedUnit;
 };
 
+export type EngineerBuildType = "road" | "trench";
+
 export type SelectHexResult =
   | { kind: "none" }
   | { kind: "combat"; preview: CombatPreview }
-  | { kind: "headquarter"; unit: Unit };
+  | { kind: "headquarter"; unit: Unit }
+  | { kind: "engineer-build"; unit: Unit; pos: Axial; options: EngineerBuildType[] };

@@ -23,15 +23,16 @@ export function parseMapDocument(value: unknown): MapDocument {
   const tiles = map.tiles.map((raw: unknown): HexTile => {
     if (!raw || typeof raw !== "object") return fail();
     const tile = raw as Record<string, unknown>;
-    const { col, row, field, hasRoad } = tile;
+    const { col, row, field, hasRoad, hasTrench } = tile;
     if (typeof col !== "number" || !Number.isInteger(col) || col < 0 || col >= width ||
         typeof row !== "number" || !Number.isInteger(row) || row < 0 || row >= height ||
-        !Object.values(FieldType).includes(field as FieldType) || typeof hasRoad !== "boolean") return fail();
+        !Object.values(FieldType).includes(field as FieldType) || typeof hasRoad !== "boolean" ||
+        (hasTrench !== undefined && typeof hasTrench !== "boolean")) return fail();
     const key = row * width + col;
     if (occupied.has(key)) return fail();
     occupied.add(key);
     // Derive axial coordinates from grid positions instead of trusting file input.
-    return { col, row, q: col - Math.floor(row / 2), r: row, field: field as FieldType, hasRoad };
+    return { col, row, q: col - Math.floor(row / 2), r: row, field: field as FieldType, hasRoad, ...(hasTrench !== undefined ? { hasTrench: hasTrench as boolean } : {}) };
   });
   return { format: "hexagon-map", version: 1, name: map.name, width, height, tiles };
 }

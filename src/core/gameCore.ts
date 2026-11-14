@@ -1,7 +1,9 @@
+import { axialDistance } from "./hexMath";
 import { isHeadquarter } from "./units/unitType";
 import { parseMapDocument, type MapDocument } from "./map/mapSerializer";
 import {
   type Axial,
+  type EngineerBuildType,
   type GameState,
   type HexTile,
   type PlayerId,
@@ -129,9 +131,11 @@ export class GameCore {
       return { kind: "none" };
     }
 
-    // 2) Engineer road attempt -> build road if in range
-    if (this.handleEngineerBuildAttempt(pos)) {
-      return { kind: "none" };
+    // Ask for a structure before spending money or consuming the engineer's action.
+    const engineer = this.state.selectedUnit;
+    if (engineer?.type === UnitType.Engineer) {
+      const options = this.getEngineerBuildOptions(engineer, pos);
+      if (options.length) return { kind: "engineer-build", unit: engineer, pos: { ...pos }, options };
     }
 
     // 3) Friendly unit click -> select unit + overlays
@@ -396,7 +400,7 @@ export class GameCore {
       if (unit.type === UnitType.Medic) {
         this.state.attackOverlay = this.combatSystem.computeHealOverlayForUnit(this.state, unit);
       } else if (unit.type === UnitType.Engineer) {
-        this.state.attackOverlay = this.combatSystem.computeEngineerRoadOverlay(this.state, unit);
+        this.state.attackOverlay = this.combatSystem.computeEngineerBuildOverlay(this.state, unit);
       } else {
         this.state.attackOverlay = this.combatSystem.computeAttackOverlayForUnit(this.state, unit);
       }   
@@ -434,23 +438,24 @@ export class GameCore {
     return true;
   }
 
-  private handleEngineerBuildAttempt(pos: Axial): boolean {
-    const engineer = this.state.selectedUnit;
-    if (!engineer) return false;
-    if (engineer.type !== UnitType.Engineer) return false;
-    if (engineer.acted) return false;
-
+  public getEngineerBuildOptions(engineer: Unit, pos: Axial): EngineerBuildType[] {
+    if (this.state.gameOver || engineer.type !== UnitType.Engineer || engineer.acted ||
+        engineer.owner !== this.state.currentPlayer || !this.state.units.includes(engineer)) return [];
     const tile = this.getTile(pos);
-    if (!tile) return false;
-    if (!this.isRoadBuildableTile(tile)) return false;
+    if (!tile || tile.field === FieldType.Ocean || this.getUnitAt(pos) ||
+        axialDistance(engineer, pos) > engineer.data.attackRange) return [];
+    const options: EngineerBuildType[] = [];
+    if (!tile.hasRoad) options.push("road");
+    if (!tile.hasTrench) options.push("trench");
+    return options;
+  }
 
-    const k = MovementSystem.key(tile.q, tile.r);
-    if (!this.state.attackOverlay[k]) return false;
-
-    const cost = 20;
-    if (!this.spend(engineer.owner, cost)) return false;
-
-    tile.hasRoad = true;
+  public buildEngineerStructure(engineer: Unit, pos: Axial, type: EngineerBuildType): boolean {
+    if (this.state.selectedUnit !== engineer || !this.getEngineerBuildOptions(engineer, pos).includes(type)) return false;
+    const tile = this.getTile(pos)!;
+    if (!this.spend(engineer.owner, 20)) return false;
+    if (type === "road") tile.hasRoad = true;
+    else tile.hasTrench = true;
     engineer.acted = true;
     this.clearSelectionAndOverlays(false);
     return true;
@@ -521,12 +526,6 @@ export class GameCore {
     this.state.selectedUnit = null;
 
     return preview;
-  }
-
-  private isRoadBuildableTile(tile: HexTile): boolean {
-    if (tile.field === FieldType.Ocean) return false;
-    if (tile.hasRoad) return false;
-    return !this.getUnitAt(tile);
   }
 
   public createNewMap(width: number, height: number): void {

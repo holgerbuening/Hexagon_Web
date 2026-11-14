@@ -35,7 +35,7 @@ export function isPlausibleGameState(value: unknown): boolean {
   const tilesOk = state.tiles.every((tile) => {
     if (typeof tile !== "object" || tile === null) return false;
     const t = tile as Record<string, unknown>;
-    return [t.q, t.r, t.col, t.row].every((n) => typeof n === "number" && Number.isFinite(n)) && isKnownKey(FIELD_TYPES, t.field);
+    return (t.hasTrench === undefined || typeof t.hasTrench === "boolean") && [t.q, t.r, t.col, t.row].every((n) => typeof n === "number" && Number.isFinite(n)) && isKnownKey(FIELD_TYPES, t.field);
   });
   if (!tilesOk) return false;
 

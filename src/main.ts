@@ -1,3 +1,4 @@
+import { showEngineerBuildDialog } from "./ui/engineerBuildDialog";
 import { showCampaignLibrary, showCampaignStory } from "./ui/campaignDialog";
 import { clone, type CampaignDocument } from "./core/campaigns/documents";
 import { createCampaignSave, parseCampaignSave, readCampaignProgress, writeCampaignProgress, finishCampaignMission, type CampaignSave } from "./core/campaigns/runtime";
@@ -270,9 +271,11 @@ canvas.addEventListener("mouseup", function (ev) {
     return;
   }
   const res = game.selectHex(hex);
-  if (res.kind !== "combat") sendOnlineState();
+  if (res.kind !== "combat" && res.kind !== "engineer-build") sendOnlineState();
   //console.log("Selected hex:", hex, "Combat preview Main.ts :", preview);
-  if (res.kind === "combat") {
+  if (res.kind === "engineer-build") {
+    engineerBuildDialog(res);
+  } else if (res.kind === "combat") {
     combatDialog( res.preview);
   } 
   else if (res.kind === "headquarter") {
@@ -417,8 +420,10 @@ canvas.addEventListener("touchend", function (ev) {
       return;
     }
     const res = game.selectHex(hex);
-  if (res.kind !== "combat") sendOnlineState();
-    if (res.kind === "combat") {
+    if (res.kind !== "combat" && res.kind !== "engineer-build") sendOnlineState();
+    if (res.kind === "engineer-build") {
+      engineerBuildDialog(res);
+    } else if (res.kind === "combat") {
       combatDialog(res.preview);
     } else if (res.kind === "headquarter") {
       headquarterDialog(res);
@@ -917,6 +922,21 @@ function showAiCombatDialogs(previews: CombatPreviewEntry[]): void {
   };
 
   showNext();
+}
+
+function engineerBuildDialog(result: Extract<SelectHexResult, { kind: "engineer-build" }>): void {
+  if (!appRoot) return;
+  renderAll();
+  showEngineerBuildDialog(appRoot, {
+    available: result.options,
+    balance: game.getBalance(result.unit.owner),
+    onBuild: type => {
+      game.buildEngineerStructure(result.unit, result.pos, type);
+      sendOnlineState();
+      renderAll();
+    },
+    onCancel: renderAll,
+  });
 }
 
 function headquarterDialog(result: SelectHexResult ): void {

@@ -1,4 +1,4 @@
-import type { Axial, CombatPreview, GameState, HexTile } from "../types";
+import type { Axial, EngineerBuildType, CombatPreview, GameState, HexTile } from "../types";
 import { axialDistance } from "../hexMath";
 import { FieldType,getFieldDef } from "../map/fieldTypes";
 import type { Unit } from "../units/unit";
@@ -210,13 +210,19 @@ export class CombatSystem {
   } 
     
   public computeEngineerRoadOverlay(state: GameState, unit: Unit): Record<string, true> {
+    return this.computeEngineerBuildOverlay(state, unit, "road");
+  }
+
+  public computeEngineerBuildOverlay(state: GameState, unit: Unit, type?: EngineerBuildType): Record<string, true> {
     const result: Record<string, true> = {};
     const range = unit.data.attackRange;
     const origin: Axial = { q: unit.q, r: unit.r };
 
     for (const tile of state.tiles) {
       if (tile.field === FieldType.Ocean) continue;
-      if (tile.hasRoad) continue;
+      const canBuildRoad = type !== "trench" && !tile.hasRoad;
+      const canBuildTrench = type !== "road" && !tile.hasTrench;
+      if (!canBuildRoad && !canBuildTrench) continue;
       if (this.getUnitAt(state, { q: tile.q, r: tile.r })) continue;
 
       const dist = axialDistance(origin, { q: tile.q, r: tile.r });
