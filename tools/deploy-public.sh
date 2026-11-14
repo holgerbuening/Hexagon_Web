@@ -12,6 +12,12 @@ if (( $# > 1 )); then
 fi
 
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
+git_status=$(git status --porcelain)
+if [[ -n "$git_status" ]]; then
+  echo "Deployment aborted: Git working tree is not clean. Commit or stash changes first." >&2
+  exit 1
+fi
+
 npm run build:publish
 
 # A complete build is required before rsync can remove obsolete remote files.
