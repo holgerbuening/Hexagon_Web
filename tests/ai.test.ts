@@ -145,6 +145,93 @@ describe("AI turn", () => {
     assert.deepEqual(runAiTurn(game, ai), []);
   });
 
+  describe("capturing cities and industry", () => {
+    for (const field of [FieldType.City, FieldType.Industry]) {
+      it(`captures reachable ${field} before pursuing an attack`, () => {
+        let infantry!: Unit;
+        const { game, ai } = createScenario(place => {
+          const from = place(2, 4); const enemy = place(6, 4);
+          infantry = new Unit(UnitType.Infantry, from.q, from.r, 1);
+          return [infantry, new Unit(UnitType.Tank, enemy.q, enemy.r, 0)];
+        });
+        const target = game.getTileByColRow(3, 4)!; target.field = field;
+        runAiTurn(game, ai);
+        assert.deepEqual({ q: infantry.q, r: infantry.r }, { q: target.q, r: target.r });
+        assert.ok(infantry.animationPath.length > 0);
+      });
+    }
+
+    it("does not let idle chance or a distant cavalry prevent a capture", () => {
+      let infantry!: Unit;
+      const { game, ai } = createScenario(place => {
+        const from = place(2, 1); const far = place(9, 8);
+        infantry = new Unit(UnitType.Infantry, from.q, from.r, 1);
+        return [infantry, new Unit(UnitType.Cavalry, far.q, far.r, 1)];
+      }, 0, { ...aiProfiles.easy, idleChance: 1 });
+      const target = game.getTileByColRow(3, 1)!; target.field = FieldType.Industry;
+      runAiTurn(game, ai);
+      assert.deepEqual({ q: infantry.q, r: infantry.r }, { q: target.q, r: target.r });
+    });
+
+    it("captures a reachable industry rather than pursuing an unreachable nearby city", () => {
+      let infantry!: Unit;
+      const { game, ai } = createScenario(place => {
+        const from = place(3, 4); infantry = new Unit(UnitType.Infantry, from.q, from.r, 1); return [infantry];
+      });
+      const city = game.getTileByColRow(3, 2)!; city.field = FieldType.City;
+      for (const tile of game.getState().tiles) {
+        if (axialDistance(tile, city) === 1) tile.field = FieldType.Ocean;
+      }
+      const industry = game.getTileByColRow(6, 4)!; industry.field = FieldType.Industry;
+      runAiTurn(game, ai);
+      assert.deepEqual({ q: infantry.q, r: infantry.r }, { q: industry.q, r: industry.r });
+    });
+
+    for (const type of [UnitType.Infantry, UnitType.Medic, UnitType.Engineer]) {
+      it(`lets ${type} take reachable income instead of its usual movement or retreat`, () => {
+        let unit!: Unit;
+        const { game, ai } = createScenario(place => {
+          const from = place(2, 4); unit = new Unit(type, from.q, from.r, 1); unit.hp = 5;
+          const medic = place(0, 4);
+          return [unit, new Unit(UnitType.Medic, medic.q, medic.r, 1)];
+        });
+        const target = game.getTileByColRow(3, 4)!; target.field = FieldType.Industry;
+        runAiTurn(game, ai);
+        assert.deepEqual({ q: unit.q, r: unit.r }, { q: target.q, r: target.r });
+      });
+    }
+
+    for (const type of [UnitType.Infantry, UnitType.Medic, UnitType.Engineer]) {
+      it(`keeps ${type} on an income tile instead of leaving to retreat or perform support tasks`, () => {
+        let garrison!: Unit;
+        const { game, ai } = createScenario(place => {
+          const home = place(2, 4); const injured = place(7, 4); const medic = place(0, 4);
+          garrison = new Unit(type, home.q, home.r, 1); garrison.hp = 5;
+          const ally = new Unit(UnitType.Infantry, injured.q, injured.r, 1); ally.hp = 5;
+          return [garrison, ally, new Unit(UnitType.Medic, medic.q, medic.r, 1)];
+        });
+        const home = game.getTile(garrison)!; home.field = FieldType.Industry;
+        runAiTurn(game, ai);
+        assert.deepEqual({ q: garrison.q, r: garrison.r }, { q: home.q, r: home.r });
+      });
+    }
+
+    it("keeps existing garrisons and sends other units to distinct free holdings", () => {
+      let garrison!: Unit; const troops: Unit[] = [];
+      const { game, ai } = createScenario(place => {
+        const home = place(2, 4); garrison = new Unit(UnitType.Infantry, home.q, home.r, 1);
+        for (const col of [3, 4]) { const pos = place(col, 5); troops.push(new Unit(UnitType.Infantry, pos.q, pos.r, 1)); }
+        return [garrison, ...troops];
+      });
+      const home = game.getTile(garrison)!; home.field = FieldType.City;
+      const targets = [game.getTileByColRow(3, 4)!, game.getTileByColRow(4, 4)!];
+      targets.forEach(t => { t.field = FieldType.Industry; });
+      runAiTurn(game, ai);
+      assert.deepEqual({ q: garrison.q, r: garrison.r }, { q: home.q, r: home.r });
+      for (const target of targets) assert.ok(troops.some(u => u.q === target.q && u.r === target.r));
+    });
+  });
+
   describe("difficulty profiles", () => {
     const advance = (profile: AiProfile) => {
       let walker!: Unit;

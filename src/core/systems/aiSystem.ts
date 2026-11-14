@@ -154,7 +154,6 @@ export class AiSystem {
     this.purchaseUnits(state, getNeighbors, getUnitAt, canAfford, spend);
 
     const hasUnoccupiedCitiesOrIndustries = this.hasUnoccupiedCityOrIndustry(state);
-    const hasUnactedCavalry = this.hasUnactedCavalry(state, state.currentPlayer);
     const aiUnits = state.units.filter(function (unit) {
       return unit.owner === state.currentPlayer && unit.type !== UnitType.MilitaryBase;
     });
@@ -183,13 +182,18 @@ export class AiSystem {
       }
       if (unit.acted) continue;
 
+      if (this.tryCaptureHolding(state, unit, getNeighbors)) continue;
+      const currentTile = this.getTile(state, unit);
+      const holdsIncome = !!currentTile && this.isCityOrIndustry(currentTile);
+
       if (unit.type === UnitType.Medic) {
         if (this.tryHeal(state, unit)) continue;
-        this.tryMoveToInjured(state, unit, getNeighbors);
+        if (!holdsIncome) this.tryMoveToInjured(state, unit, getNeighbors);
         continue;
       }
       
       if (unit.type === UnitType.Engineer) {
+        if (holdsIncome) continue;
         const target = this.findEngineerTarget(state, unit);
         if (!target || !canAfford(unit.owner, AiSystem.ENGINEER_ROAD_COST)) continue;
         if (this.tryBuildEngineerRoad(state, unit, target, spend)) continue;
@@ -200,7 +204,7 @@ export class AiSystem {
         continue;
       }
 
-      if (unit.hp < unit.maxHP * this.profile.retreatHpRatio && this.tryRetreat(state, unit, getNeighbors)) continue;
+      if (!holdsIncome && unit.hp < unit.maxHP * this.profile.retreatHpRatio && this.tryRetreat(state, unit, getNeighbors)) continue;
 
       const preview = this.tryAttack(state, unit, getTile, getNeighbors);
       if (preview) {
@@ -209,7 +213,7 @@ export class AiSystem {
         continue;
       }
 
-      this.tryMove(state, unit, getNeighbors, hasUnoccupiedCitiesOrIndustries, hasUnactedCavalry, attackingUnits);
+      this.tryMove(state, unit, getNeighbors, attackingUnits);
     }
     return combatPreviews;
   }
@@ -627,12 +631,37 @@ export class AiSystem {
     return { from: best.from, target: best.target, damage: best.damage, reachable: moves ? reachable : null };
   }
 
+  /** Take available income before combat, retreat, support tasks or random idling. */
+  private tryCaptureHolding(state: GameState, unit: Unit, getNeighbors: GetNeighbors): boolean {
+    if (unit.acted || unit.remainingMovement <= 0) return false;
+    const current = this.getTile(state, unit);
+    // Moving a garrison to another holding would give up its existing income.
+    if (current && this.isCityOrIndustry(current)) return false;
+
+    const reachable = this.movementSystem.computeReachableTiles(state, unit, getNeighbors);
+    let target: HexTile | null = null;
+    let bestCost = Number.POSITIVE_INFINITY;
+    for (const tile of state.tiles) {
+      if (!this.isCityOrIndustry(tile) || this.getUnitAt(state, tile)) continue;
+      const cost = reachable[MovementSystem.key(tile.q, tile.r)];
+      if (cost === undefined) continue;
+      if (cost < bestCost || (cost === bestCost && tile.field === FieldType.City && target?.field !== FieldType.City)) {
+        target = tile;
+        bestCost = cost;
+      }
+    }
+    if (!target) return false;
+    const path = this.movementSystem.computePathToTarget(state, unit, target, getNeighbors);
+    if (!path || !this.movementSystem.tryMoveUsingReachable(state, unit, target, reachable)) return false;
+    unit.animationPath = path;
+    unit.acted = true;
+    return true;
+  }
+
   private tryMove(
     state: GameState,
     unit: Unit,
     getNeighbors: GetNeighbors,
-    hasUnoccupiedCitiesOrIndustries: boolean,
-    hasUnactedCavalry: boolean,
     attackingUnits: ReadonlySet<Unit>
   ): boolean {
     if (unit.acted || unit.remainingMovement <= 0) return false;
@@ -641,11 +670,8 @@ export class AiSystem {
     const currentTile = this.getTile(state, { q: unit.q, r: unit.r });
     if (currentTile && this.isCityOrIndustry(currentTile)) return false;
 
-    const shouldReserveCapturesForCavalry =
-      hasUnoccupiedCitiesOrIndustries &&
-      unit.type !== UnitType.Cavalry &&
-      hasUnactedCavalry;
-    const target = this.findTarget(state, unit, !shouldReserveCapturesForCavalry);
+    // Cavalry already acts first; other units may pursue holdings it did not capture.
+    const target = this.findTarget(state, unit);
     if (!target) return false;
 
     if (this.tryRelieveGarrison(state, unit, target, getNeighbors, attackingUnits)) return true;
@@ -1189,16 +1215,14 @@ export class AiSystem {
     return this.findClosestFreeTileInRange(state, unit, threat) ?? { q: threat.q, r: threat.r };
   }
 
-  private findTarget(state: GameState, unit: Unit, allowFreeTargets: boolean): Axial | null {
+  private findTarget(state: GameState, unit: Unit): Axial | null {
     if (this.profile.defendHeadquarter) {
       const defenseTarget = this.findHeadquarterDefenseTarget(state, unit);
       if (defenseTarget) return defenseTarget;
     }
 
-    if (allowFreeTargets) {
-      const freeTarget = this.findClosestUnoccupiedCityOrIndustry(state, unit);
-      if (freeTarget) return freeTarget;
-    }
+    const freeTarget = this.findClosestUnoccupiedCityOrIndustry(state, unit);
+    if (freeTarget) return freeTarget;
 
     const aiHoldings = this.countHoldings(state, unit.owner);
     let opponentHoldings = 0;
@@ -1257,12 +1281,6 @@ export class AiSystem {
     return state.tiles.some(function (tile) {
       if (!system.isCityOrIndustry(tile)) return false;
       return !system.getUnitAt(state, { q: tile.q, r: tile.r });
-    });
-  }
-
-  private hasUnactedCavalry(state: GameState, owner: PlayerId): boolean {
-    return state.units.some(function (unit) {
-      return unit.owner === owner && unit.type === UnitType.Cavalry && !unit.acted;
     });
   }
 
