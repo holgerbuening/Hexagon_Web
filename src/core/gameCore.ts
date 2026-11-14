@@ -4,6 +4,7 @@ import { parseMapDocument, type MapDocument } from "./map/mapSerializer";
 import {
   type Axial,
   type EngineerBuildType,
+  type EngineerActionType,
   type GameState,
   type HexTile,
   type PlayerId,
@@ -120,7 +121,8 @@ export class GameCore {
 
     // deselect if clicking the same tile
     const selectedUnit = this.state.selectedUnit;
-    if (selectedUnit && selectedUnit.q === tile.q && selectedUnit.r === tile.r) {
+    if (selectedUnit && selectedUnit.q === tile.q && selectedUnit.r === tile.r &&
+        !this.getEngineerActions(selectedUnit, pos).length) {
       this.clearSelectionAndOverlays(true);
       return { kind: "none" };
     }
@@ -134,7 +136,7 @@ export class GameCore {
     // Ask for a structure before spending money or consuming the engineer's action.
     const engineer = this.state.selectedUnit;
     if (engineer?.type === UnitType.Engineer) {
-      const options = this.getEngineerBuildOptions(engineer, pos);
+      const options = this.getEngineerActions(engineer, pos);
       if (options.length) return { kind: "engineer-build", unit: engineer, pos: { ...pos }, options };
     }
 
@@ -400,7 +402,7 @@ export class GameCore {
       if (unit.type === UnitType.Medic) {
         this.state.attackOverlay = this.combatSystem.computeHealOverlayForUnit(this.state, unit);
       } else if (unit.type === UnitType.Engineer) {
-        this.state.attackOverlay = this.combatSystem.computeEngineerBuildOverlay(this.state, unit);
+        this.state.attackOverlay = this.combatSystem.computeEngineerActionOverlay(this.state, unit);
       } else {
         this.state.attackOverlay = this.combatSystem.computeAttackOverlayForUnit(this.state, unit);
       }   
@@ -439,23 +441,37 @@ export class GameCore {
   }
 
   public getEngineerBuildOptions(engineer: Unit, pos: Axial): EngineerBuildType[] {
+    return this.getEngineerActions(engineer, pos).filter((type): type is EngineerBuildType => type === "road" || type === "trench");
+  }
+
+  public getEngineerActions(engineer: Unit, pos: Axial): EngineerActionType[] {
     if (this.state.gameOver || engineer.type !== UnitType.Engineer || engineer.acted ||
         engineer.owner !== this.state.currentPlayer || !this.state.units.includes(engineer)) return [];
     const tile = this.getTile(pos);
-    if (!tile || tile.field === FieldType.Ocean || this.getUnitAt(pos) ||
-        axialDistance(engineer, pos) > engineer.data.attackRange) return [];
-    const options: EngineerBuildType[] = [];
-    if (!tile.hasRoad) options.push("road");
-    if (!tile.hasTrench) options.push("trench");
-    return options;
+    if (!tile || tile.field === FieldType.Ocean || axialDistance(engineer, pos) > engineer.data.attackRange) return [];
+    const occupant = this.getUnitAt(pos);
+    if (occupant && occupant !== engineer) return [];
+    const options: EngineerActionType[] = [];
+    if (tile.hasRoad) options.push("demolish-road");
+    if (tile.hasTrench) options.push("demolish-trench");
+    // Legacy tiles may contain both structures; demolition can clear them individually.
+    if (options.length) return options;
+    return occupant ? [] : ["road", "trench"];
   }
 
   public buildEngineerStructure(engineer: Unit, pos: Axial, type: EngineerBuildType): boolean {
-    if (this.state.selectedUnit !== engineer || !this.getEngineerBuildOptions(engineer, pos).includes(type)) return false;
+    return this.performEngineerAction(engineer, pos, type);
+  }
+
+  public performEngineerAction(engineer: Unit, pos: Axial, type: EngineerActionType): boolean {
+    if (this.state.selectedUnit !== engineer || !this.getEngineerActions(engineer, pos).includes(type)) return false;
     const tile = this.getTile(pos)!;
-    if (!this.spend(engineer.owner, 20)) return false;
-    if (type === "road") tile.hasRoad = true;
-    else tile.hasTrench = true;
+    if (type === "road" || type === "trench") {
+      if (!this.spend(engineer.owner, 20)) return false;
+      if (type === "road") tile.hasRoad = true;
+      else tile.hasTrench = true;
+    } else if (type === "demolish-road") tile.hasRoad = false;
+    else tile.hasTrench = false;
     engineer.acted = true;
     this.clearSelectionAndOverlays(false);
     return true;

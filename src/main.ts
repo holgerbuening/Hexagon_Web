@@ -931,7 +931,7 @@ function engineerBuildDialog(result: Extract<SelectHexResult, { kind: "engineer-
     available: result.options,
     balance: game.getBalance(result.unit.owner),
     onBuild: type => {
-      game.buildEngineerStructure(result.unit, result.pos, type);
+      game.performEngineerAction(result.unit, result.pos, type);
       sendOnlineState();
       renderAll();
     },

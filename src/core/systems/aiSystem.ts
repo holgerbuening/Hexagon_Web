@@ -1230,7 +1230,7 @@ export class AiSystem {
     // Keep skipped gaps in the plan so they can be completed in a later turn.
     for (const pos of engineer.roadBuildPath) {
       const tile = this.getTile(state, pos);
-      if (!tile || tile.field === FieldType.Ocean || tile.hasRoad) continue;
+      if (!tile || tile.field === FieldType.Ocean || tile.hasRoad || tile.hasTrench) continue;
       if (this.isCityOrIndustry(tile)) continue;
 
       const occupant = this.getUnitAt(state, pos);

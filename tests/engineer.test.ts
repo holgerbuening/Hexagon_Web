@@ -50,19 +50,71 @@ test("dismissing the build request leaves the engineer and funds available", () 
   assert.equal(game.buildEngineerStructure(engineer, target, "trench"), true);
 });
 
-test("roads and trenches are independent, duplicate construction is unavailable", () => {
+for (const existing of ["road", "trench"] as const) {
+  test(`an existing ${existing} blocks both build options and can be demolished for free`, () => {
+    const { game, state, engineer, target } = scenario(0);
+    if (existing === "road") target.hasRoad = true;
+    else target.hasTrench = true;
+    const demolition = existing === "road" ? "demolish-road" : "demolish-trench";
+    assert.deepEqual(game.getEngineerBuildOptions(engineer, target), []);
+    const request = game.selectHex(target);
+    assert.equal(request.kind, "engineer-build");
+    if (request.kind === "engineer-build") assert.deepEqual(request.options, [demolition]);
+    assert.equal(game.buildEngineerStructure(engineer, target, "road"), false);
+    assert.equal(game.buildEngineerStructure(engineer, target, "trench"), false);
+    const combat = new CombatSystem(); const key = MovementSystem.key(target.q, target.r);
+    assert.equal(combat.computeEngineerRoadOverlay(state, engineer)[key], undefined);
+    assert.equal(combat.computeEngineerBuildOverlay(state, engineer)[key], undefined);
+    assert.equal(combat.computeEngineerActionOverlay(state, engineer)[key], true);
+    assert.equal(game.performEngineerAction(engineer, target, demolition), true);
+    assert.equal(!!target.hasRoad, false); assert.equal(!!target.hasTrench, false);
+    assert.equal(game.getBalance(0), 0); assert.equal(engineer.acted, true);
+    assert.equal(game.performEngineerAction(engineer, target, demolition), false);
+    // Demolition consumes this turn's action; the other type can be built next turn.
+    engineer.resetForNewTurn(); game.selectHex(engineer); game.addBalance(0, 20);
+    assert.equal(game.buildEngineerStructure(engineer, target, existing === "road" ? "trench" : "road"), true);
+    assert.equal(target.hasRoad, existing !== "road");
+    assert.equal(!!target.hasTrench, existing === "road");
+    assert.equal(game.getBalance(0), 0);
+  });
+}
+
+test("the engineer can demolish a structure underneath itself", () => {
+  const { game, engineer } = scenario(0);
+  const tile = game.getTile(engineer)!; tile.hasTrench = true;
+  const request = game.selectHex(engineer);
+  assert.equal(request.kind, "engineer-build");
+  if (request.kind === "engineer-build") assert.deepEqual(request.options, ["demolish-trench"]);
+  assert.equal(game.performEngineerAction(engineer, tile, "demolish-trench"), true);
+  assert.equal(tile.hasTrench, false); assert.equal(game.getBalance(0), 0);
+});
+
+test("demolition rejects occupied, distant or empty targets and revalidates changed structures", () => {
   const { game, state, engineer, target } = scenario();
+  assert.equal(game.performEngineerAction(engineer, target, "demolish-road"), false);
   target.hasRoad = true;
-  assert.deepEqual(game.getEngineerBuildOptions(engineer, target), ["trench"]);
-  const combat = new CombatSystem(); const key = MovementSystem.key(target.q, target.r);
-  assert.equal(combat.computeEngineerRoadOverlay(state, engineer)[key], undefined);
-  assert.equal(combat.computeEngineerBuildOverlay(state, engineer)[key], true);
-  assert.equal(game.buildEngineerStructure(engineer, target, "road"), false);
-  assert.equal(game.buildEngineerStructure(engineer, target, "trench"), true);
-  assert.equal(target.hasRoad, true); assert.equal(target.hasTrench, true);
+  const other = new Unit(UnitType.Infantry, target.q, target.r, 1); state.units.push(other);
+  assert.equal(game.performEngineerAction(engineer, target, "demolish-road"), false);
+  state.units.pop();
+  const distant = game.getTileByColRow(8, 4)!; distant.hasTrench = true;
+  assert.equal(game.performEngineerAction(engineer, distant, "demolish-trench"), false);
+  game.selectHex(target); target.hasRoad = false;
+  assert.equal(game.performEngineerAction(engineer, target, "demolish-road"), false);
+  assert.equal(engineer.acted, false); assert.equal(game.getBalance(0), 100);
+});
+
+test("legacy tiles containing both structures can be cleared one structure per action", () => {
+  const { game, engineer, target } = scenario(0);
+  target.hasRoad = true; target.hasTrench = true;
+  assert.deepEqual(game.getEngineerActions(engineer, target), ["demolish-road", "demolish-trench"]);
+  assert.equal(game.performEngineerAction(engineer, target, "demolish-road"), true);
+  assert.equal(target.hasRoad, false); assert.equal(target.hasTrench, true);
   engineer.resetForNewTurn(); game.selectHex(engineer);
-  assert.deepEqual(game.getEngineerBuildOptions(engineer, target), []);
-  assert.equal(combat.computeEngineerBuildOverlay(state, engineer)[key], undefined);
+  assert.deepEqual(game.getEngineerActions(engineer, target), ["demolish-trench"]);
+  assert.equal(game.performEngineerAction(engineer, target, "demolish-trench"), true);
+  assert.equal(game.getBalance(0), 0);
+  const saved = game.serializeState(); const restored = new GameCore(10, 10); restored.loadState(saved);
+  assert.equal(restored.getTile(target)!.hasRoad, false); assert.equal(restored.getTile(target)!.hasTrench, false);
 });
 
 test("construction rejects water, occupied tiles, distant tiles and insufficient funds", () => {

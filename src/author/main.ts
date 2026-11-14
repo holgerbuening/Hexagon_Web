@@ -292,7 +292,7 @@ function refreshSelection(): void {
   element("selection-label").textContent = tile ? `Tile ${tile.col}, ${tile.row} · axial ${tile.q}, ${tile.r}` : "No selection";
   if (!tile || !m) { const p = document.createElement("p"); p.className = "hint"; p.textContent = "Select a tile on the map. Use the Place unit tool to add units."; container.append(p); return; }
   field(container, "Terrain", tile.field, v => { tile.field = v as FieldType; }, { choices: terrainChoices });
-  field(container, "Road", tile.hasRoad ? "yes" : "no", v => { tile.hasRoad = v === "yes"; }, { choices: [["no", "No"], ["yes", "Yes"]] });
+  field(container, "Road", tile.hasRoad ? "yes" : "no", v => { tile.hasRoad = v === "yes"; if (tile.hasRoad) tile.hasTrench = false; }, { choices: [["no", "No"], ["yes", "Yes"]] });
   const u = m.state.units.find(u => u.q === tile.q && u.r === tile.r);
   if (!u) { const p = document.createElement("p"); p.textContent = "No unit on this tile."; p.className = "hint"; container.append(p); return; }
   field(container, "Unit type", u.type, v => {
@@ -323,7 +323,7 @@ canvas.addEventListener("pointerdown", event => {
   if (!m || !tile) return;
   selected = hex;
   if (tool === "terrain") change(() => { tile.field = element<HTMLSelectElement>("terrain").value as FieldType; });
-  if (tool === "road") change(() => { tile.hasRoad = !tile.hasRoad; });
+  if (tool === "road") change(() => { tile.hasRoad = !tile.hasRoad; if (tile.hasRoad) tile.hasTrench = false; });
   if (tool === "remove") change(() => { m.state.units = m.state.units.filter(u => u.q !== hex.q || u.r !== hex.r); });
   if (tool === "unit") {
     if (m.state.units.some(u => u.q === hex.q && u.r === hex.r)) announce("This tile is occupied. Edit or remove the existing unit.", true);

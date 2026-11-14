@@ -1,4 +1,4 @@
-import type { Axial, EngineerBuildType, CombatPreview, GameState, HexTile } from "../types";
+import type { Axial, CombatPreview, GameState, HexTile } from "../types";
 import { axialDistance } from "../hexMath";
 import { FieldType,getFieldDef } from "../map/fieldTypes";
 import type { Unit } from "../units/unit";
@@ -209,20 +209,29 @@ export class CombatSystem {
     return result;
   } 
     
-  public computeEngineerRoadOverlay(state: GameState, unit: Unit): Record<string, true> {
-    return this.computeEngineerBuildOverlay(state, unit, "road");
+  public computeEngineerActionOverlay(state: GameState, unit: Unit): Record<string, true> {
+    const result = this.computeEngineerBuildOverlay(state, unit);
+    for (const tile of state.tiles) {
+      if (tile.field === FieldType.Ocean || (!tile.hasRoad && !tile.hasTrench)) continue;
+      const occupant = this.getUnitAt(state, tile);
+      if (occupant && occupant !== unit) continue;
+      if (axialDistance(unit, tile) <= unit.data.attackRange) result[MovementSystem.key(tile.q, tile.r)] = true;
+    }
+    return result;
   }
 
-  public computeEngineerBuildOverlay(state: GameState, unit: Unit, type?: EngineerBuildType): Record<string, true> {
+  public computeEngineerRoadOverlay(state: GameState, unit: Unit): Record<string, true> {
+    return this.computeEngineerBuildOverlay(state, unit);
+  }
+
+  public computeEngineerBuildOverlay(state: GameState, unit: Unit): Record<string, true> {
     const result: Record<string, true> = {};
     const range = unit.data.attackRange;
     const origin: Axial = { q: unit.q, r: unit.r };
 
     for (const tile of state.tiles) {
       if (tile.field === FieldType.Ocean) continue;
-      const canBuildRoad = type !== "trench" && !tile.hasRoad;
-      const canBuildTrench = type !== "road" && !tile.hasTrench;
-      if (!canBuildRoad && !canBuildTrench) continue;
+      if (tile.hasRoad || tile.hasTrench) continue;
       if (this.getUnitAt(state, { q: tile.q, r: tile.r })) continue;
 
       const dist = axialDistance(origin, { q: tile.q, r: tile.r });
