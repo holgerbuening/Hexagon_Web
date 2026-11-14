@@ -6055,22 +6055,6 @@
         "units": [
           {
             "type": "militarybase",
-            "q": 7,
-            "r": 1,
-            "owner": 1,
-            "hp": 100,
-            "maxHP": 100,
-            "offense": 0,
-            "defense": 10,
-            "attackRange": 0,
-            "experience": 0,
-            "remainingMovement": 0,
-            "acted": false,
-            "selected": false,
-            "roadBuildPath": []
-          },
-          {
-            "type": "militarybase",
             "q": -3,
             "r": 14,
             "owner": 0,
@@ -6241,6 +6225,22 @@
             "attackRange": 1,
             "experience": 0,
             "remainingMovement": 3,
+            "acted": false,
+            "selected": false,
+            "roadBuildPath": []
+          },
+          {
+            "type": "militarybasefortified",
+            "q": 7,
+            "r": 1,
+            "owner": 1,
+            "hp": 100,
+            "maxHP": 100,
+            "offense": 0,
+            "defense": 200,
+            "attackRange": 0,
+            "experience": 0,
+            "remainingMovement": 0,
             "acted": false,
             "selected": false,
             "roadBuildPath": []
