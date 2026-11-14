@@ -448,15 +448,23 @@ export class GameCore {
     if (this.state.gameOver || engineer.type !== UnitType.Engineer || engineer.acted ||
         engineer.owner !== this.state.currentPlayer || !this.state.units.includes(engineer)) return [];
     const tile = this.getTile(pos);
-    if (!tile || tile.field === FieldType.Ocean || axialDistance(engineer, pos) > engineer.data.attackRange) return [];
+    if (!tile || tile.field === FieldType.Ocean) return [];
+    const distance = axialDistance(engineer, pos);
+    if (distance > Math.max(1, engineer.data.attackRange)) return [];
     const occupant = this.getUnitAt(pos);
     if (occupant && occupant !== engineer) return [];
     const options: EngineerActionType[] = [];
-    if (tile.hasRoad) options.push("demolish-road");
-    if (tile.hasTrench) options.push("demolish-trench");
-    // Legacy tiles may contain both structures; demolition can clear them individually.
-    if (options.length) return options;
-    return occupant ? [] : ["road", "trench"];
+    if (distance <= engineer.data.attackRange) {
+      if (tile.hasRoad) options.push("demolish-road");
+      if (tile.hasTrench) options.push("demolish-trench");
+      // Legacy tiles may contain both structures; demolition can clear them individually.
+      if (!tile.hasRoad && !tile.hasTrench && !occupant) options.push("road", "trench");
+    }
+    if (distance === 1 && !occupant) {
+      const reachable = this.movementSystem.computeReachableTiles(this.state, engineer, (q, r) => this.getNeighbors(q, r));
+      if (reachable[MovementSystem.key(pos.q, pos.r)] !== undefined) options.push("move");
+    }
+    return options;
   }
 
   public buildEngineerStructure(engineer: Unit, pos: Axial, type: EngineerBuildType): boolean {
@@ -465,6 +473,11 @@ export class GameCore {
 
   public performEngineerAction(engineer: Unit, pos: Axial, type: EngineerActionType): boolean {
     if (this.state.selectedUnit !== engineer || !this.getEngineerActions(engineer, pos).includes(type)) return false;
+    if (type === "move") {
+      // Recompute on confirmation, so changed terrain or movement points cannot use a stale cost.
+      this.state.reachableTiles = this.movementSystem.computeReachableTiles(this.state, engineer, (q, r) => this.getNeighbors(q, r));
+      return this.handleMoveAttempt(pos);
+    }
     const tile = this.getTile(pos)!;
     if (type === "road" || type === "trench") {
       if (!this.spend(engineer.owner, 20)) return false;

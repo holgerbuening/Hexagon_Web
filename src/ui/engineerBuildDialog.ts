@@ -8,13 +8,19 @@ export function showEngineerBuildDialog(root: HTMLElement, options: {
 }): void {
   const overlay = document.createElement("div"); overlay.className = "dialog-overlay";
   const dialog = document.createElement("section"); dialog.className = "campaign-dialog";
-  dialog.setAttribute("role", "dialog"); dialog.setAttribute("aria-modal", "true"); dialog.setAttribute("aria-label", "Engineer construction");
+  dialog.setAttribute("role", "dialog"); dialog.setAttribute("aria-modal", "true"); dialog.setAttribute("aria-label", "Engineer actions");
   const content = document.createElement("div"); content.className = "campaign-content";
-  const title = document.createElement("h2"); title.textContent = "Engineer construction";
+  const title = document.createElement("h2"); title.textContent = "Engineer actions";
   const hint = document.createElement("p");
-  hint.textContent = options.available.some(type => type.startsWith("demolish-"))
-    ? "Demolition is free and uses the engineer's action. Remove the structure before building another one."
-    : "Choose Road or Trench. Cost: 20. Only one structure can occupy a tile.";
+  const hints: string[] = [];
+  if (options.available.some(type => type.startsWith("demolish-"))) {
+    hints.push("Demolition is free and uses the engineer's action. Remove the structure before building another one.");
+  }
+  if (options.available.includes("road") || options.available.includes("trench")) {
+    hints.push("Road or Trench costs 20. Only one structure can occupy a tile.");
+  }
+  if (options.available.includes("move")) hints.push("Move uses movement points and costs no money.");
+  hint.textContent = hints.join(" ");
   const actions = document.createElement("div"); actions.className = "campaign-actions";
   let closed = false;
   function close(action: () => void): void {
@@ -27,7 +33,7 @@ export function showEngineerBuildDialog(root: HTMLElement, options: {
   function onKeyDown(event: KeyboardEvent): void {
     if (event.key === "Escape") { event.preventDefault(); close(options.onCancel); }
   }
-  for (const [type, label] of [["road", "Road"], ["trench", "Trench"], ["demolish-road", "Demolish road (free)"], ["demolish-trench", "Demolish trench (free)"]] as const) {
+  for (const [type, label] of [["road", "Road"], ["trench", "Trench"], ["demolish-road", "Demolish road (free)"], ["demolish-trench", "Demolish trench (free)"], ["move", "Move"]] as const) {
     if (!options.available.includes(type)) continue;
     const button = document.createElement("button"); button.type = "button"; button.className = "dialog-button";
     button.textContent = label;

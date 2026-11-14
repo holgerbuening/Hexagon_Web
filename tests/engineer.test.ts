@@ -30,7 +30,7 @@ for (const type of ["road", "trench"] as const) {
     const request = game.selectHex(target);
     assert.equal(request.kind, "engineer-build");
     if (request.kind !== "engineer-build") return;
-    assert.deepEqual(request.options, ["road", "trench"]);
+    assert.deepEqual(request.options, ["road", "trench", "move"]);
     assert.equal(game.getBalance(0), 100); assert.equal(engineer.acted, false);
     assert.equal(target.hasRoad, false); assert.equal(!!target.hasTrench, false);
     assert.equal(game.buildEngineerStructure(engineer, target, type), true);
@@ -59,7 +59,7 @@ for (const existing of ["road", "trench"] as const) {
     assert.deepEqual(game.getEngineerBuildOptions(engineer, target), []);
     const request = game.selectHex(target);
     assert.equal(request.kind, "engineer-build");
-    if (request.kind === "engineer-build") assert.deepEqual(request.options, [demolition]);
+    if (request.kind === "engineer-build") assert.deepEqual(request.options, [demolition, "move"]);
     assert.equal(game.buildEngineerStructure(engineer, target, "road"), false);
     assert.equal(game.buildEngineerStructure(engineer, target, "trench"), false);
     const combat = new CombatSystem(); const key = MovementSystem.key(target.q, target.r);
@@ -106,15 +106,53 @@ test("demolition rejects occupied, distant or empty targets and revalidates chan
 test("legacy tiles containing both structures can be cleared one structure per action", () => {
   const { game, engineer, target } = scenario(0);
   target.hasRoad = true; target.hasTrench = true;
-  assert.deepEqual(game.getEngineerActions(engineer, target), ["demolish-road", "demolish-trench"]);
+  assert.deepEqual(game.getEngineerActions(engineer, target), ["demolish-road", "demolish-trench", "move"]);
   assert.equal(game.performEngineerAction(engineer, target, "demolish-road"), true);
   assert.equal(target.hasRoad, false); assert.equal(target.hasTrench, true);
   engineer.resetForNewTurn(); game.selectHex(engineer);
-  assert.deepEqual(game.getEngineerActions(engineer, target), ["demolish-trench"]);
+  assert.deepEqual(game.getEngineerActions(engineer, target), ["demolish-trench", "move"]);
   assert.equal(game.performEngineerAction(engineer, target, "demolish-trench"), true);
   assert.equal(game.getBalance(0), 0);
   const saved = game.serializeState(); const restored = new GameCore(10, 10); restored.loadState(saved);
   assert.equal(restored.getTile(target)!.hasRoad, false); assert.equal(restored.getTile(target)!.hasTrench, false);
+});
+
+test("Move in the popup uses normal movement points and animation without construction cost", () => {
+  const { game, state, engineer, target } = scenario(0);
+  const origin = { ...engineer.pos };
+  const request = game.selectHex(target);
+  assert.equal(request.kind, "engineer-build");
+  if (request.kind === "engineer-build") assert.ok(request.options.includes("move"));
+  assert.equal(game.performEngineerAction(engineer, target, "move"), true);
+  assert.deepEqual({ q: engineer.q, r: engineer.r }, { q: target.q, r: target.r });
+  assert.deepEqual(engineer.pos, origin);
+  assert.deepEqual(engineer.animationPath[engineer.animationPath.length - 1], { q: target.q, r: target.r });
+  assert.equal(engineer.remainingMovement, 2); assert.equal(engineer.acted, false);
+  assert.equal(game.getBalance(0), 0); assert.equal(state.selectedUnit, null);
+  assert.equal(target.hasRoad, false); assert.equal(!!target.hasTrench, false);
+});
+
+test("moving into a trench costs three points and is unavailable with only two left", () => {
+  const { game, engineer, target } = scenario(); target.hasTrench = true;
+  engineer.remainingMovement = 2;
+  assert.deepEqual(game.getEngineerActions(engineer, target), ["demolish-trench"]);
+  assert.equal(game.performEngineerAction(engineer, target, "move"), false);
+  engineer.remainingMovement = 3;
+  assert.equal(game.performEngineerAction(engineer, target, "move"), true);
+  assert.equal(engineer.remainingMovement, 0); assert.equal(target.hasTrench, true);
+});
+
+test("Move rechecks changed terrain and occupation before confirming", () => {
+  const { game, state, engineer, target } = scenario();
+  game.selectHex(target); engineer.remainingMovement = 2; target.hasTrench = true;
+  assert.equal(game.performEngineerAction(engineer, target, "move"), false);
+  assert.equal(engineer.remainingMovement, 2);
+  target.hasTrench = false;
+  state.units.push(new Unit(UnitType.Infantry, target.q, target.r, 1));
+  assert.equal(game.performEngineerAction(engineer, target, "move"), false);
+  state.units.pop(); target.field = FieldType.Ocean;
+  assert.equal(game.performEngineerAction(engineer, target, "move"), false);
+  assert.equal(game.getBalance(0), 100);
 });
 
 test("construction rejects water, occupied tiles, distant tiles and insufficient funds", () => {

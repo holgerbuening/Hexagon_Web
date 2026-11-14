@@ -105,7 +105,7 @@ export type CombatPreviewEntry = {
 };
 
 export type EngineerBuildType = "road" | "trench";
-export type EngineerActionType = EngineerBuildType | "demolish-road" | "demolish-trench";
+export type EngineerActionType = EngineerBuildType | "demolish-road" | "demolish-trench" | "move";
 
 export type SelectHexResult =
   | { kind: "none" }
