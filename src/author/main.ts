@@ -361,6 +361,14 @@ function readJson(onRead: (value: unknown) => void): void {
   }); input.click();
 }
 element("tool").addEventListener("change", () => { tool = element<HTMLSelectElement>("tool").value as Tool; });
+element("terrain").addEventListener("change", () => {
+  tool = "terrain";
+  element<HTMLSelectElement>("tool").value = tool;
+});
+element("unit-type").addEventListener("change", () => {
+  tool = "unit";
+  element<HTMLSelectElement>("tool").value = tool;
+});
 element("fit").addEventListener("click", fitMap);
 element("mission-tab").addEventListener("click", () => { view = "mission"; render(); });
 element("campaign-tab").addEventListener("click", () => { view = "campaign"; render(); });

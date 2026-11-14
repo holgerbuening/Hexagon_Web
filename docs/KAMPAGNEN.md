@@ -36,10 +36,11 @@ Kampagne muss alle Missionsprüfungen bestehen: eindeutige Kennungen, Titel,
 HQs für beide Seiten und keine Einheiten auf Wasser. Fehler einer Kampagne
 werden in der Auswahl angezeigt, ohne andere Kampagnen auszublenden.
 
-Danach wie gewohnt `npm run build` ausführen und **dist/** veröffentlichen.
+Danach `npm run build:publish` ausführen und **dist/** veröffentlichen, damit
+das öffentliche Autorenstudio unter `/author/` ebenfalls erhalten bleibt.
 Vite übernimmt Dateien aus `public/` in den Spielbuild. Im Entwicklungsserver
-sind sie direkt erreichbar. Weder das Autorenstudio noch `dist-author/` müssen
-auf den öffentlichen Server kopiert werden.
+sind sie direkt erreichbar. Der gemeinsame Build enthält das Autorenstudio bereits; `dist-author/` muss
+nicht zusätzlich auf den Server kopiert werden.
 
 ## Bilder
 

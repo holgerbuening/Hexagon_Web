@@ -251,8 +251,10 @@ Spielstart abgewiesen; ihr Gelände wird nicht automatisch verändert.
 
 Missionseditor und Kampagnenverwaltung lokal mit `npm run dev:editor` starten
 und `http://127.0.0.1:5174/author/index.html` öffnen. Die Autorenwerkzeuge
-werden separat nach `dist-author/` gebaut und sind nicht Teil des normalen
-Spielbuilds. Anleitung: [Autorenstudio](docs/AUTORENSTUDIO.md).
+lassen sich separat nach `dist-author/` bauen. Mit `npm run build:publish`
+werden Spiel und Studio gemeinsam nach `dist/` gebaut; das Studio ist dann
+öffentlich unter `/author/` erreichbar. `npm run deploy` veröffentlicht das
+vollständige Paket auf dem bestehenden Server. Anleitung: [Autorenstudio](docs/AUTORENSTUDIO.md).
 
 ## Kampagnen spielen
 

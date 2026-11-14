@@ -85,19 +85,41 @@ Der Test verändert keine Missionsvorlage und keinen Kampagnenfortschritt.
 ```sh
 npm run build          # nur das normale Spiel → dist/
 npm run build:editor   # Autorenstudio + Testspiel → dist-author/
-npm run preview:editor # lokalen Autoren-Build ansehen
+npm run preview:editor # lokalen Autoren-Build ansehen (Port 4174)
+npm run build:publish  # Spiel + Autorenstudio + Testspiel gemeinsam → dist/
+npm run preview        # gemeinsames Paket lokal ansehen (Port 4173)
 ```
 
-Für die lokale Vorschau: **http://127.0.0.1:5175/author/index.html**.
+Der gemeinsame Build enthält folgende Einstiege:
 
-`author/` und `src/author/` sind keine Abhängigkeiten des normalen Spieleinstiegs.
-Der normale Build enthält weder die Autorenseiten noch deren Bedienoberfläche.
-Die bestehende Veröffentlichung von `dist/` veröffentlicht somit keine neuen
-Autorenwerkzeuge. **`dist-author/` nicht auf die öffentliche Spielseite kopieren.**
-Der bisherige einfache Karteneditor des Spiels bleibt davon unabhängig bestehen.
+- `/`: das normale Spiel.
+- `/author/` bzw. `/author/index.html`: das öffentlich zugängliche Autorenstudio.
+- `/author/play.html`: Testspiel für die im Editor gewählte Mission.
 
-Das Studio hat keine Anmeldung und benötigt lokal auch keine. Falls es später
-im Netz bereitgestellt wird, braucht es einen geschützten Serverzugang.
+Für den separaten Autoren-Build ist die Vorschau unter
+**http://127.0.0.1:4174/author/** erreichbar. Beim gemeinsamen Build unter
+**http://localhost:4173/author/**.
+
+Das Studio wird ohne Passwort und ohne Menülink im normalen Spiel bereitgestellt.
+Jeder mit der Adresse kann es verwenden. Entwürfe bleiben im jeweiligen Browser;
+der Editor kann keine Dateien auf den Spielserver schreiben oder Kampagnen dort
+veröffentlichen. Missionen werden weiterhin als JSON exportiert und bewusst in
+den Kampagnenkatalog des Projekts übernommen. Lokale Entwürfe aus der Entwicklung
+lassen sich über Export und Import in den öffentlichen Editor übertragen.
+
+Für das Deployment auf den bestehenden Server:
+
+```sh
+npm run deploy:preview # baut das vollständige Paket und zeigt rsync-Änderungen
+npm run deploy         # baut und veröffentlicht nach /var/www/html/
+```
+
+Das versionierte Skript ist `tools/deploy-public.sh`; der lokale Einstieg
+`deploy.sh` ruft es ebenfalls auf. Deployment immer mit dem gemeinsamen Build
+vornehmen: `rsync --delete` aus einem reinen Spielbuild würde das Autorenstudio
+wieder entfernen. Auf dem Webserver muss `index.html` als Verzeichnisindex aktiv
+sein, damit `/author/` direkt funktioniert. Es wird keine zusätzliche Server-API
+und kein Passwortschutz benötigt.
 
 Exportierte Kampagnen können jetzt im normalen Spiel über **Campaigns** gespielt
 werden. Ablage der JSON-Dateien, Katalog und Bildpfade sind unter
