@@ -1,7 +1,7 @@
 import { isHeadquarter } from "../units/unitType";
 import type { Axial, CombatPreviewEntry, GameState, HexTile, PlayerId } from "../types";
 import { axialDistance } from "../hexMath";
-import { FieldType, getFieldDef } from "../map/fieldTypes";
+import { FieldType, getTileDefense, TRENCH_MOVEMENT_COST, TRENCH_DEFENSE } from "../map/fieldTypes";
 import { MovementSystem } from "./movementSystem";
 import { CombatSystem } from "./combatSystem";
 import { Unit, fortifyHeadquarter } from "../units/unit";
@@ -107,7 +107,7 @@ export const aiProfiles: Record<AiDifficulty, AiProfile> = {
 };
 
 export class AiSystem {
-  private static readonly ENGINEER_ROAD_COST = 20;
+  private static readonly ENGINEER_BUILD_COST = 20;
   private static readonly COMBAT_UNIT_TYPES: UnitType[] = [
     UnitType.Infantry,
     UnitType.MachnineGun,
@@ -186,22 +186,13 @@ export class AiSystem {
       return unit.owner === state.currentPlayer && !isHeadquarter(unit.type);
     });
 
-    if (hasUnoccupiedCitiesOrIndustries) {
-      aiUnits.sort(function (left, right) {
-        let leftPriority = 1;
-        if (left.type === UnitType.Cavalry) {
-          leftPriority = 0;
-        }
-        let rightPriority = 1;
-        if (right.type === UnitType.Cavalry) {
-          rightPriority = 0;
-        }
-        if (leftPriority !== rightPriority) {
-          return leftPriority - rightPriority;
-        }
-        return left.q - right.q || left.r - right.r;
-      });
-    }
+    // Build cover before combat troops choose their positions this turn.
+    aiUnits.sort((left, right) => {
+      const priority = (unit: Unit) => unit.type === UnitType.Engineer ? 0 :
+        hasUnoccupiedCitiesOrIndustries && unit.type === UnitType.Cavalry ? 1 : 2;
+      return priority(left) - priority(right) ||
+        (hasUnoccupiedCitiesOrIndustries ? left.q - right.q || left.r - right.r : 0);
+    });
 
     for (const unit of aiUnits) {
       // Older saves may contain engineers without a road plan.
@@ -221,12 +212,20 @@ export class AiSystem {
       }
       
       if (unit.type === UnitType.Engineer) {
+        if (!canAfford(unit.owner, AiSystem.ENGINEER_BUILD_COST)) continue;
+        const trench = this.findEngineerTrenchTarget(state, unit, getNeighbors);
+        if (trench && this.tryBuildEngineerStructure(state, unit, trench, "trench", spend)) continue;
         if (holdsIncome) continue;
+        if (trench && this.tryMoveEngineer(state, unit, trench, getNeighbors)) {
+          this.tryBuildEngineerStructure(state, unit, trench, "trench", spend);
+          unit.acted = true;
+          continue;
+        }
         const target = this.findEngineerTarget(state, unit);
-        if (!target || !canAfford(unit.owner, AiSystem.ENGINEER_ROAD_COST)) continue;
-        if (this.tryBuildEngineerRoad(state, unit, target, spend)) continue;
+        if (!target) continue;
+        if (this.tryBuildEngineerStructure(state, unit, target, "road", spend)) continue;
         if (this.tryMoveEngineer(state, unit, target, getNeighbors)) {
-          this.tryBuildEngineerRoad(state, unit, target, spend);
+          this.tryBuildEngineerStructure(state, unit, target, "road", spend);
           unit.acted = true;
         }
         continue;
@@ -360,7 +359,7 @@ export class AiSystem {
       this.isCityOrIndustry(tile) && !this.getUnitAt(state, tile)).length;
 
     const ranked = AiSystem.COMBAT_UNIT_TYPES.map((type) => {
-      let score = this.matchupEfficiency(type, enemies, owner) / (1 + AiSystem.OWN_TYPE_PENALTY * countOf(type));
+      let score = this.matchupEfficiency(state, type, enemies, owner) / (1 + AiSystem.OWN_TYPE_PENALTY * countOf(type));
       // Fast units capture free cities and industry first.
       if (type === UnitType.Cavalry && countOf(UnitType.Cavalry) < freeHoldings) score += 0.5;
       return { type, score, price: UNIT_TYPES[type].price };
@@ -382,14 +381,14 @@ export class AiSystem {
   }
 
   /** Average value gained per money spent when a unit type fights the given enemies. */
-  private matchupEfficiency(type: UnitType, enemies: Unit[], owner: PlayerId): number {
+  private matchupEfficiency(state: GameState, type: UnitType, enemies: Unit[], owner: PlayerId): number {
     const prototype = new Unit(type, 0, 0, owner);
     const price = prototype.data.price;
     const targets = enemies.length > 0 ? enemies : [new Unit(UnitType.Infantry, 0, 0, owner === 0 ? 1 : 0)];
 
     let total = 0;
     for (const enemy of targets) {
-      const attack = this.combatSystem.estimateOutcome(prototype, enemy, FieldType.Farmland, prototype.attackRange);
+      const attack = this.combatSystem.estimateOutcome(prototype, enemy, enemies.length ? this.fieldAt(state, enemy) : FieldType.Farmland, prototype.attackRange);
       const defense = this.combatSystem.estimateOutcome(enemy, prototype, FieldType.Farmland, enemy.attackRange);
       const gain = (Math.min(attack.damageDefender, enemy.hp) / 100) * this.unitValue(enemy);
       // Being attacked is less certain than attacking, hence the factor.
@@ -590,8 +589,8 @@ export class AiSystem {
     return unit.data.price;
   }
 
-  private fieldAt(state: GameState, pos: Axial): FieldType {
-    return this.getTile(state, pos)?.field ?? FieldType.Farmland;
+  private fieldAt(state: GameState, pos: Axial): Pick<HexTile, "field" | "hasTrench"> {
+    return this.getTile(state, pos) ?? { field: FieldType.Farmland };
   }
 
   /**
@@ -676,7 +675,7 @@ export class AiSystem {
       if (!positionBest) continue;
 
       // Prefer defensible, low-threat positions; this also makes ranged units keep their distance.
-      const terrain = (getFieldDef(this.fieldAt(state, candidate.pos)).defense / 100) * value * 0.15;
+      const terrain = (getTileDefense(this.fieldAt(state, candidate.pos)) / 100) * value * 0.15;
       const threat = (this.estimateThreat(state, attacker, candidate.pos) / 100) * value * 0.5 *
         this.profile.threatWeight;
       const total = positionBest.score + terrain - threat - candidate.moveCost * 0.5;
@@ -789,7 +788,7 @@ export class AiSystem {
     const rate = (pos: Axial): number => {
       const pathCost = field.get(MovementSystem.key(pos.q, pos.r)) ?? 1000 + axialDistance(pos, target);
       if (pos.q === target.q && pos.r === target.r) return pathCost;
-      const terrain = getFieldDef(this.fieldAt(state, pos)).defense / 50;
+      const terrain = getTileDefense(this.fieldAt(state, pos)) / 50;
       const threat = Math.min(2, (this.estimateThreat(state, unit, pos) / Math.max(1, unit.hp)) * 1.5) *
         this.profile.threatWeight;
       return pathCost - terrain + threat;
@@ -1240,20 +1239,63 @@ export class AiSystem {
     return null;
   }
 
-  private tryBuildEngineerRoad(
-    state: GameState,
-    engineer: Unit,
-    target: HexTile,
-    spend: Spend
+  private findEngineerTrenchTarget(state: GameState, engineer: Unit, getNeighbors: GetNeighbors): HexTile | null {
+    const owner = engineer.owner;
+    const holdsIncome = (unit: Unit) => {
+      const tile = this.getTile(state, unit);
+      return !!tile && this.isCityOrIndustry(tile);
+    };
+    const anchors = state.units.filter(u => u.owner === owner && (isHeadquarter(u.type) || holdsIncome(u)));
+    const enemies = state.units.filter(u => u.owner !== owner && u.offense > 0 && !isHeadquarter(u.type));
+    const defenders = state.units.filter(u => u.owner === owner && AiSystem.COMBAT_UNIT_TYPES.includes(u.type) &&
+      !u.acted && u.remainingMovement >= TRENCH_MOVEMENT_COST && !holdsIncome(u));
+    if (!anchors.length || !enemies.length || !defenders.length) return null;
+    const defenderMoves = defenders.map(unit => ({ unit, reachable: this.movementSystem.computeReachableTiles(state, unit, getNeighbors) }));
+    let best: HexTile | null = null;
+    let bestScore = Number.NEGATIVE_INFINITY;
+    for (const anchor of anchors) {
+      const threats = enemies.filter(enemy => {
+        const distance = axialDistance(enemy, anchor);
+        if (distance > AiSystem.HQ_DANGER_DISTANCE) return false;
+        return distance <= enemy.attackRange || this.getCostField(state, anchor, getNeighbors).has(MovementSystem.key(enemy.q, enemy.r));
+      });
+      if (!threats.length) continue;
+      // Two firing positions per holding are enough; keep money and open routes for the army.
+      if (state.tiles.filter(tile => tile.hasTrench && axialDistance(tile, anchor) <= 2).length >= 2) continue;
+      for (const tile of state.tiles) {
+        const anchorDistance = axialDistance(tile, anchor);
+        if (tile.field === FieldType.Ocean || tile.hasRoad || tile.hasTrench || this.isCityOrIndustry(tile) ||
+            this.getUnitAt(state, tile) || anchorDistance > 2) continue;
+        const facing = threats.filter(enemy => axialDistance(enemy, tile) < axialDistance(enemy, anchor));
+        if (!facing.length) continue;
+        const enemyDistance = Math.min(...facing.map(enemy => axialDistance(enemy, tile)));
+        const defender = defenderMoves.find(({ unit, reachable }) => {
+          const cost = reachable[MovementSystem.key(tile.q, tile.r)];
+          // Only the destination's cost changes when a trench is built on this route.
+          return cost !== undefined && cost + TRENCH_MOVEMENT_COST - this.movementSystem.getMovementCost(tile) <= unit.remainingMovement &&
+            axialDistance(unit, tile) <= enemyDistance;
+        });
+        if (!defender) continue;
+        const engineerDistance = axialDistance(engineer, tile);
+        const score = TRENCH_DEFENSE - getTileDefense(tile) - anchorDistance * 10 - engineerDistance * 5 -
+          axialDistance(defender.unit, tile) * 5 + (engineerDistance <= engineer.data.attackRange ? 30 : 0);
+        if (score > bestScore) { best = tile; bestScore = score; }
+      }
+    }
+    return best;
+  }
+
+  private tryBuildEngineerStructure(
+    state: GameState, engineer: Unit, target: HexTile, type: "road" | "trench", spend: Spend
   ): boolean {
     if (engineer.acted) return false;
-
-    const overlay = this.combatSystem.computeEngineerRoadOverlay(state, engineer);
+    const overlay = this.combatSystem.computeEngineerBuildOverlay(state, engineer);
     if (!overlay[MovementSystem.key(target.q, target.r)]) return false;
-    if (!spend(engineer.owner, AiSystem.ENGINEER_ROAD_COST)) return false;
-
-    target.hasRoad = true;
+    if (!spend(engineer.owner, AiSystem.ENGINEER_BUILD_COST)) return false;
+    if (type === "road") target.hasRoad = true;
+    else target.hasTrench = true;
     engineer.acted = true;
+    this.costFieldCache.clear();
     return true;
   }
 

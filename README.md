@@ -264,3 +264,17 @@ Im Hauptmenü **Campaigns** wählen. Exportierte Kampagnen können direkt gelade
 oder unter `public/campaigns/` veröffentlicht und in `public/campaigns/index.json`
 eingetragen werden. Bilder aus dem Autorenstudio sind bereits eingebettet.
 Anleitung und Bildpfade: [Kampagnen](docs/KAMPAGNEN.md).
+
+## Schützengräben
+
+Ein Engineer kann auf einem freien Feld in Reichweite entweder eine Straße oder
+einen Schützengraben bauen (20 Geld). Vorhandene Bauwerke können kostenlos
+abgerissen werden; Bauen und Abriss verbrauchen jeweils die Engineer-Aktion.
+Gräben haben unabhängig vom Gelände Bewegungskosten **3** und einen
+Feldverteidigungswert von **100**, der den ursprünglichen Geländebonus ersetzt.
+Einheiten mit weniger als drei Bewegungspunkten können Grabenfelder nicht betreten.
+
+Die KI baut Gräben vor bedrohten HQs, Städten und Industrien, wenn eigene mobile
+Kampfeinheiten die Stellung erreichen können. Sie bereitet diese Stellungen vor
+der Truppenbewegung vor und begrenzt den Ausbau auf zwei Gräben je Schutzbereich.
+Außerhalb solcher Verteidigungssituationen setzt der Engineer den Straßenbau fort.

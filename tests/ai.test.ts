@@ -232,6 +232,100 @@ describe("AI turn", () => {
     });
   });
 
+  describe("defensive trenches", () => {
+    const build = (options: { balance?: number; enemyNear?: boolean; defenderType?: UnitType; distantEngineer?: boolean } = {}) => {
+      let engineer!: Unit; let defender!: Unit;
+      const scenario = createScenario(place => {
+        const troop = place(3, 5);
+        const enemy = options.enemyNear === false ? place(9, 0) : place(5, 5);
+        const builder = options.distantEngineer ? place(4, 3) : place(2, 4);
+        defender = new Unit(options.defenderType ?? UnitType.Infantry, troop.q, troop.r, 1);
+        engineer = new Unit(UnitType.Engineer, builder.q, builder.r, 1);
+        // Put the engineer last; it still needs to build before troops move.
+        return [defender, new Unit(UnitType.Infantry, enemy.q, enemy.r, 0), engineer];
+      }, options.balance ?? 20);
+      const hq = scenario.state.units.find(u => u.owner === 1 && u.type === UnitType.MilitaryBase)!;
+      const home = scenario.game.getTileByColRow(1, 5)!;
+      hq.q = home.q; hq.r = home.r; hq.pos = { q: home.q, r: home.r };
+      return { ...scenario, engineer, defender, hq };
+    };
+
+    it("builds a usable trench toward a nearby threat before combat troops move", () => {
+      const { game, state, ai, engineer, hq } = build();
+      runAiTurn(game, ai);
+      const trenches = state.tiles.filter(t => t.hasTrench);
+      assert.equal(trenches.length, 1);
+      assert.ok(axialDistance(trenches[0]!, hq) <= 2);
+      assert.equal(trenches[0]!.hasRoad, false);
+      assert.equal(game.getBalance(1), 0); assert.equal(engineer.acted, true);
+    });
+
+    it("also protects a threatened occupied industry with usable trenches", () => {
+      const { game, state, ai, hq } = build();
+      const industry = game.getTile(hq)!; industry.field = FieldType.Industry;
+      state.units.push(new Unit(UnitType.Infantry, industry.q, industry.r, 1));
+      const home = game.getTileByColRow(0, 9)!;
+      hq.q = home.q; hq.r = home.r; hq.pos = { q: home.q, r: home.r };
+      runAiTurn(game, ai);
+      const trenches = state.tiles.filter(t => t.hasTrench);
+      assert.equal(trenches.length, 1);
+      assert.ok(axialDistance(trenches[0]!, industry) <= 2);
+    });
+
+    it("approaches a useful defensive site and builds after moving", () => {
+      const { game, state, ai, engineer } = build({ distantEngineer: true });
+      runAiTurn(game, ai);
+      assert.equal(state.tiles.filter(t => t.hasTrench).length, 1);
+      assert.ok(engineer.animationPath.length > 0);
+      assert.equal(game.getBalance(1), 0);
+    });
+
+    it("keeps building roads when there is no nearby threat", () => {
+      const { game, state, ai } = build({ enemyNear: false });
+      runAiTurn(game, ai);
+      assert.equal(state.tiles.some(t => t.hasTrench), false);
+      assert.ok(state.tiles.some(t => t.hasRoad));
+    });
+
+    it("does not build trenches its available two-point troops cannot enter", () => {
+      const { game, state, ai } = build({ defenderType: UnitType.MachnineGun });
+      runAiTurn(game, ai);
+      assert.equal(state.tiles.some(t => t.hasTrench), false);
+    });
+
+    it("does not spend construction money when the treasury is insufficient", () => {
+      const { game, state, ai, engineer } = build({ balance: 19 });
+      runAiTurn(game, ai);
+      assert.equal(state.tiles.some(t => t.hasTrench || t.hasRoad), false);
+      assert.equal(game.getBalance(1), 19); assert.equal(engineer.acted, false);
+    });
+
+    it("limits defensive trenches to two positions per protected holding", () => {
+      const { game, state, ai } = build();
+      game.getTileByColRow(0, 5)!.hasTrench = true;
+      game.getTileByColRow(1, 4)!.hasTrench = true;
+      runAiTurn(game, ai);
+      assert.equal(state.tiles.filter(t => t.hasTrench).length, 2);
+      assert.equal(state.tiles.some(t => t.hasRoad && t.hasTrench), false);
+    });
+
+    it("uses trench protection in attack scoring instead of treating enemies as exposed", () => {
+      let tank!: Unit; let exposed!: Unit; let dugIn!: Unit;
+      const { game, state, ai } = createScenario(place => {
+        const from = place(3, 4); const cover = place(4, 4); const open = place(3, 5);
+        tank = new Unit(UnitType.Tank, from.q, from.r, 1);
+        dugIn = new Unit(UnitType.Infantry, cover.q, cover.r, 0);
+        exposed = new Unit(UnitType.Infantry, open.q, open.r, 0);
+        return [tank, dugIn, exposed];
+      });
+      game.getTile(dugIn)!.hasTrench = true;
+      const previews = runAiTurn(game, ai);
+      const attack = previews.find(p => p.attacker.type === UnitType.Tank);
+      assert.ok(attack);
+      assert.deepEqual(attack.preview.defenderPos, { q: exposed.q, r: exposed.r });
+    });
+  });
+
   describe("difficulty profiles", () => {
     const advance = (profile: AiProfile) => {
       let walker!: Unit;

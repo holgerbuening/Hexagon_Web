@@ -3,6 +3,10 @@
 Stand: 14. November 2026. Befestigung kostet 250 und erhöht die Grundverteidigung
 von 10 auf 200. Lebenspunkte und Erfahrung bleiben erhalten.
 
+Die folgenden Simulationszahlen dokumentieren den KI-Stand **vor der Einführung
+der taktischen Schützengräben**. Mit der aktuellen Weg- und Verteidigungslogik
+können erneute Läufe derselben Befehle andere Ergebnisse liefern.
+
 ## Eingebaute Regel
 
 Die KI prüft die Befestigung vor dem normalen Truppeneinkauf. Standardmäßig gilt

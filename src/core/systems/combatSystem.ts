@@ -1,6 +1,6 @@
 import type { Axial, CombatPreview, GameState, HexTile } from "../types";
 import { axialDistance } from "../hexMath";
-import { FieldType,getFieldDef } from "../map/fieldTypes";
+import { FieldType, getFieldDef, getTileDefense } from "../map/fieldTypes";
 import type { Unit } from "../units/unit";
 import type { Rng } from "../rng";
 import { MovementSystem } from "./movementSystem";
@@ -38,10 +38,7 @@ export class CombatSystem {
     const attackBase = attacker.offense + attacker.experience * 10;
 
     const defenderTile = getTile(defender.pos);
-    let fieldDefense = 0;
-    if (defenderTile) {
-      fieldDefense = getFieldDef(defenderTile.field).defense;
-    }
+    const fieldDefense = getTileDefense(defenderTile);
    
     const defenseBase = defender.defense + defender.experience * 10 + fieldDefense;
 
@@ -120,11 +117,12 @@ export class CombatSystem {
   public estimateOutcome(
     attacker: Unit,
     defender: Unit,
-    defenderField: FieldType,
+    defenderField: FieldType | Pick<HexTile, "field" | "hasTrench">,
     distance: number
   ): { damageDefender: number; damageAttacker: number } {
     const attackBase = attacker.offense + attacker.experience * 10;
-    const defenseBase = defender.defense + defender.experience * 10 + getFieldDef(defenderField).defense;
+    const fieldDefense = typeof defenderField === "string" ? getFieldDef(defenderField).defense : getTileDefense(defenderField);
+    const defenseBase = defender.defense + defender.experience * 10 + fieldDefense;
 
     // Mean of the random rolls: attack 0.75..1.5 and defense 0.9..1.1 of base, random 0..99.
     const attackPower = attackBase * (0.75 + 0.75 * 0.495);

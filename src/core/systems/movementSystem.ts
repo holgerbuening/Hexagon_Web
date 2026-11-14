@@ -1,5 +1,5 @@
 import type { Axial, GameState, HexTile } from "../types";
-import { FieldType } from "../map/fieldTypes";
+import { FieldType, TRENCH_MOVEMENT_COST } from "../map/fieldTypes";
 import type { Unit } from "../units/unit";
 
 export interface PathfindingOptions {
@@ -28,6 +28,7 @@ export class MovementSystem {
   }
 
   public getMovementCost(tile: HexTile): number {
+    if (tile.hasTrench) return TRENCH_MOVEMENT_COST;
     // English comment: Keep it simple and readable (no clever one-liners)
     if (tile.hasRoad) return Math.floor(this.getFieldCost(tile.field) / 2);
     return this.getFieldCost(tile.field);

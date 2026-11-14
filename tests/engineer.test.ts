@@ -4,7 +4,7 @@ import { GameCore } from "../src/core/gameCore";
 import { Unit } from "../src/core/units/unit";
 import { UnitType } from "../src/core/units/unitType";
 import type { GameState } from "../src/core/types";
-import { FieldType } from "../src/core/map/fieldTypes";
+import { FieldType, getTileDefense } from "../src/core/map/fieldTypes";
 import { createSeededRng } from "../src/core/rng";
 import { MovementSystem } from "../src/core/systems/movementSystem";
 import { CombatSystem } from "../src/core/systems/combatSystem";
@@ -161,14 +161,49 @@ test("trenches survive saved games, campaign files and map export; older maps re
   assert.throws(() => parseMapDocument({ ...map, tiles: invalid.tiles }));
 });
 
-test("trenches do not change movement cost or combat defense", () => {
+test("trenches cost exactly three movement points and replace terrain defense with 100", () => {
   const { game, target } = scenario();
-  const movement = new MovementSystem(); const combat = new CombatSystem();
-  const attacker = new Unit(UnitType.Infantry, target.q - 1, target.r, 1);
+  const movement = new MovementSystem();
+  for (const field of Object.values(FieldType)) {
+    target.field = field; target.hasTrench = true;
+    assert.equal(movement.getMovementCost(target), 3);
+    assert.equal(getTileDefense(target), 100);
+  }
+  // Old mixed road/trench saves must not accidentally halve trench costs.
+  target.hasRoad = true;
+  assert.equal(movement.getMovementCost(game.getTile(target)!), 3);
+});
+
+test("combat preview and AI damage estimates use trench defense instead of the underlying terrain bonus", () => {
+  const { game, state, target } = scenario();
+  const attacker = new Unit(UnitType.Tank, target.q - 1, target.r, 1);
   const defender = new Unit(UnitType.Infantry, target.q, target.r, 0);
-  const beforeMove = movement.getMovementCost(target);
-  const beforeCombat = combat.estimateOutcome(attacker, defender, target.field, 1);
+  const combat = new CombatSystem(() => 0.5);
+  const plainPreview = combat.computePreview(state, attacker, defender, pos => game.getTile(pos));
+  const plainEstimate = combat.estimateOutcome(attacker, defender, target, 1);
   target.hasTrench = true;
-  assert.equal(movement.getMovementCost(game.getTile(target)!), beforeMove);
-  assert.deepEqual(combat.estimateOutcome(attacker, defender, target.field, 1), beforeCombat);
+  for (const field of [FieldType.Farmland, FieldType.Mountain, FieldType.City]) {
+    target.field = field;
+    const preview = combat.computePreview(state, attacker, defender, pos => game.getTile(pos));
+    assert.equal(preview.defenseBase, defender.defense + 100);
+    assert.ok(preview.damageDefender < plainPreview.damageDefender);
+    assert.ok(combat.estimateOutcome(attacker, defender, target, 1).damageDefender < plainEstimate.damageDefender);
+  }
+});
+
+test("reachability charges three points, chooses cheaper detours, and demolition restores normal cost", () => {
+  const { game, state, engineer, target } = scenario();
+  const movement = new MovementSystem();
+  const directions = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, -1], [-1, 1]];
+  const neighbors = (q: number, r: number) => directions.map(([dq, dr]) => game.getTile({ q: q + dq!, r: r + dr! })).filter((t): t is NonNullable<typeof t> => !!t);
+  target.hasTrench = true;
+  engineer.remainingMovement = 2;
+  assert.equal(movement.computeReachableTiles(state, engineer, neighbors)[MovementSystem.key(target.q, target.r)], undefined);
+  engineer.remainingMovement = 3;
+  assert.equal(movement.computeReachableTiles(state, engineer, neighbors)[MovementSystem.key(target.q, target.r)], 3);
+  const beyond = game.getTile({ q: target.q + 1, r: target.r })!;
+  const path = movement.computePathToTarget(state, engineer, beyond, neighbors, { maxCost: 3 });
+  assert.ok(path); assert.equal(path.some(p => p.q === target.q && p.r === target.r), false);
+  assert.equal(game.performEngineerAction(engineer, target, "demolish-trench"), true);
+  assert.equal(movement.getMovementCost(target), 1);
 });

@@ -1,3 +1,5 @@
+import type { HexTile } from "../types";
+
 export enum FieldType {
   Woods = "Woods",
   Ocean = "Ocean",
@@ -73,4 +75,12 @@ export const FIELD_TYPES: Record<FieldType, FieldTypeDef> = {
 // Small helper for readability
 export function getFieldDef(field: FieldType): FieldTypeDef {
   return FIELD_TYPES[field];
+}
+
+export const TRENCH_MOVEMENT_COST = 3;
+export const TRENCH_DEFENSE = 100;
+
+/** A trench replaces the underlying terrain's defense bonus. */
+export function getTileDefense(tile: Pick<HexTile, "field" | "hasTrench"> | undefined): number {
+  return tile ? (tile.hasTrench ? TRENCH_DEFENSE : getFieldDef(tile.field).defense) : 0;
 }

@@ -16,7 +16,7 @@ import {
 import  { Unit, fortifyHeadquarter } from "./units/unit";
 import  { UnitType } from "./units/unitType";
 import { UNIT_TYPES } from "./units/unitType";
-import { FieldType, getFieldDef } from "./map/fieldTypes";
+import { FieldType } from "./map/fieldTypes";
 import { CombatSystem } from "./systems/combatSystem";
 import { MovementSystem } from "./systems/movementSystem";
 import { AnimationSystem } from "./systems/animationSystem";
