@@ -31,7 +31,7 @@ function getFlagUrl(unit: Unit): string {
 
 function getUnitImageUrl(unit: Unit): string {
   // English comment: unit.type maps directly to sprite filename
-  return `/images/units/${String(unit.type).toLowerCase()}.png`;
+  return `/images/units/${unit.data.spriteKey}.png`;
 }
 
 export function showCombatDialog(

@@ -926,6 +926,7 @@ function headquarterDialog(result: SelectHexResult ): void {
       onClose: () => renderAll(),
       onBuy: (unitType) => {
       game.beginPurchase(result.unit, unitType);
+      sendOnlineState();
       renderAll();
     },
    }, { balance });

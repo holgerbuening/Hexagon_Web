@@ -1,3 +1,4 @@
+import { isHeadquarter } from "./units/unitType";
 import { parseMapDocument, type MapDocument } from "./map/mapSerializer";
 import {
   type Axial,
@@ -344,10 +345,10 @@ export class GameCore {
 
   private evaluateGameOver(attackerOwner: PlayerId): void {
     const hq0Alive = this.state.units.some(
-      (unit) => unit.owner === 0 && unit.type === UnitType.MilitaryBase
+      (unit) => unit.owner === 0 && isHeadquarter(unit.type)
     );
     const hq1Alive = this.state.units.some(
-      (unit) => unit.owner === 1 && unit.type === UnitType.MilitaryBase
+      (unit) => unit.owner === 1 && isHeadquarter(unit.type)
     );
 
     if (hq0Alive && hq1Alive) {
@@ -373,7 +374,7 @@ export class GameCore {
     if (unit.owner !== this.state.currentPlayer) return null;
 
      // English comment: If the player clicked their own HQ, return an HQ-event
-    if (unit.type === UnitType.MilitaryBase) {
+    if (isHeadquarter(unit.type)) {
       // Clear overlays so UI stays clean
       this.state.selectedUnit = null;
       this.state.reachableTiles = {};
@@ -608,7 +609,23 @@ export class GameCore {
     return true;
   }
 
-  public beginPurchase(hqUnit: Unit, unitType: UnitType): void {
+  public beginPurchase(hqUnit: Unit, unitType: UnitType): boolean {
+    if (this.state.gameOver || hqUnit.owner !== this.state.currentPlayer ||
+        !this.state.units.includes(hqUnit) || !isHeadquarter(hqUnit.type)) return false;
+    if (unitType === UnitType.MilitaryBaseFortified) {
+      if (hqUnit.type !== UnitType.MilitaryBase || !this.spend(hqUnit.owner, UNIT_TYPES[unitType].price)) return false;
+      const fortified = new Unit(unitType, hqUnit.q, hqUnit.r, hqUnit.owner);
+      fortified.maxHP = hqUnit.maxHP;
+      fortified.hp = hqUnit.hp;
+      fortified.experience = hqUnit.experience;
+      fortified.acted = true;
+      this.state.units[this.state.units.indexOf(hqUnit)] = fortified;
+      this.cancelPurchase();
+      this.clearSelectionAndOverlays(false);
+      this.state.selectedHex = { q: fortified.q, r: fortified.r };
+      return true;
+    }
+    if (isHeadquarter(unitType)) return false;
     this.pendingPurchase = { unitType, owner: hqUnit.owner };
     this.state.selectedUnit = null;
     this.state.attackOverlay = {};
@@ -620,6 +637,7 @@ export class GameCore {
       probeUnit,
       (q, r) => this.getNeighbors(q, r)
     );
+    return true;
   }
 
   public cancelPurchase(): void {

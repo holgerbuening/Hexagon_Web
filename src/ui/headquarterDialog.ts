@@ -96,6 +96,9 @@ export function showHeadquarterDialog(
     UnitType.Tank
   ];
 
+  if (hqUnit.type === UnitType.MilitaryBase) {
+    purchasableUnits.push(UnitType.MilitaryBaseFortified);
+  }
   leftCol.appendChild(unitList);
 
   const rightCol = document.createElement("div");
@@ -221,6 +224,7 @@ export function showHeadquarterDialog(
       }
       if (buyBtn) {
         buyBtn.disabled = bal < data.price;
+        buyBtn.textContent = selectedUnitType === UnitType.MilitaryBaseFortified ? "Upgrade" : "Buy";
       }
     }
   }

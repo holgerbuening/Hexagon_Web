@@ -1,3 +1,4 @@
+import { isHeadquarter } from "../units/unitType";
 import type { Axial, CombatPreviewEntry, GameState, HexTile, PlayerId } from "../types";
 import { axialDistance } from "../hexMath";
 import { FieldType, getFieldDef } from "../map/fieldTypes";
@@ -155,7 +156,7 @@ export class AiSystem {
 
     const hasUnoccupiedCitiesOrIndustries = this.hasUnoccupiedCityOrIndustry(state);
     const aiUnits = state.units.filter(function (unit) {
-      return unit.owner === state.currentPlayer && unit.type !== UnitType.MilitaryBase;
+      return unit.owner === state.currentPlayer && !isHeadquarter(unit.type);
     });
 
     if (hasUnoccupiedCitiesOrIndustries) {
@@ -241,10 +242,10 @@ export class AiSystem {
     spend: Spend
   ): void {
     const owner = state.currentPlayer;
-    const headquarters = state.units.filter((unit) => unit.owner === owner && unit.type === UnitType.MilitaryBase);
+    const headquarters = state.units.filter((unit) => unit.owner === owner && isHeadquarter(unit.type));
     const income = this.estimateIncome(state, owner);
     const threatened = headquarters.some((hq) => state.units.some((enemy) =>
-      enemy.owner !== owner && enemy.type !== UnitType.MilitaryBase &&
+      enemy.owner !== owner && !isHeadquarter(enemy.type) &&
       axialDistance(enemy, hq) <= AiSystem.HQ_DANGER_DISTANCE));
 
     for (const hq of headquarters) {
@@ -289,7 +290,7 @@ export class AiSystem {
       return UnitType.Medic;
     }
 
-    const enemies = state.units.filter((unit) => unit.owner !== owner && unit.type !== UnitType.MilitaryBase);
+    const enemies = state.units.filter((unit) => unit.owner !== owner && !isHeadquarter(unit.type));
     const freeHoldings = state.tiles.filter((tile) =>
       this.isCityOrIndustry(tile) && !this.getUnitAt(state, tile)).length;
 
@@ -388,7 +389,7 @@ export class AiSystem {
     }
 
     const headquarters = state.units.filter(function (unit) {
-      return unit.owner === aiPlayer && unit.type === UnitType.MilitaryBase;
+      return unit.owner === aiPlayer && isHeadquarter(unit.type);
     });
 
     for (const hq of headquarters) {
@@ -520,7 +521,7 @@ export class AiSystem {
   }
 
   private unitValue(unit: Unit): number {
-    if (unit.type === UnitType.MilitaryBase) return 800;
+    if (isHeadquarter(unit.type)) return 800;
     return unit.data.price;
   }
 
@@ -586,7 +587,7 @@ export class AiSystem {
 
     const candidates: { pos: Axial; moveCost: number }[] = [{ pos: origin, moveCost: 0 }];
     let reachable: Record<string, number> | null = null;
-    if (!holdsPosition && attacker.remainingMovement > 0 && attacker.type !== UnitType.MilitaryBase) {
+    if (!holdsPosition && attacker.remainingMovement > 0 && !isHeadquarter(attacker.type)) {
       reachable = this.movementSystem.computeReachableTiles(state, attacker, getNeighbors);
       for (const key of Object.keys(reachable)) {
         const [qStr, rStr] = key.split(",");
@@ -782,7 +783,7 @@ export class AiSystem {
   }
 
   private canRelieveGarrison(unit: Unit): boolean {
-    return unit.type !== UnitType.MilitaryBase &&
+    return !isHeadquarter(unit.type) &&
       unit.type !== UnitType.Engineer && unit.type !== UnitType.Medic &&
       !unit.acted && unit.remainingMovement > 0 && unit.hp >= unit.maxHP * this.profile.retreatHpRatio;
   }
@@ -1122,7 +1123,7 @@ export class AiSystem {
 
     for (const unit of state.units) {
       if (unit.owner !== owner) continue;
-      if (unit.type !== UnitType.MilitaryBase) continue;
+      if (!isHeadquarter(unit.type)) continue;
       const distance = axialDistance(from, { q: unit.q, r: unit.r });
       if (distance < bestDistance) {
         bestDistance = distance;
@@ -1197,11 +1198,11 @@ export class AiSystem {
     let threatDistance = Number.POSITIVE_INFINITY;
 
     for (const hq of state.units) {
-      if (hq.owner !== unit.owner || hq.type !== UnitType.MilitaryBase) continue;
+      if (hq.owner !== unit.owner || !isHeadquarter(hq.type)) continue;
       if (axialDistance(unit, hq) > AiSystem.HQ_DEFENDER_DISTANCE) continue;
 
       for (const enemy of state.units) {
-        if (enemy.owner === unit.owner || enemy.type === UnitType.MilitaryBase) continue;
+        if (enemy.owner === unit.owner || isHeadquarter(enemy.type)) continue;
         if (axialDistance(enemy, hq) > AiSystem.HQ_DANGER_DISTANCE) continue;
         const distance = axialDistance(unit, enemy);
         if (distance < threatDistance) {
@@ -1236,7 +1237,7 @@ export class AiSystem {
     if (aiHoldings > opponentHoldings) {
       for (const enemy of state.units) {
         if (enemy.owner === unit.owner) continue;
-        if (enemy.type !== UnitType.MilitaryBase) continue;
+        if (!isHeadquarter(enemy.type)) continue;
 
         const target = this.findClosestFreeTileInRange(state, unit, { q: enemy.q, r: enemy.r });
         if (target) return target;
@@ -1321,7 +1322,7 @@ export class AiSystem {
 
     for (const hq of state.units) {
       if (hq.owner !== unit.owner) continue;
-      if (hq.type !== UnitType.MilitaryBase) continue;
+      if (!isHeadquarter(hq.type)) continue;
 
       const distance = axialDistance({ q: unit.q, r: unit.r }, { q: hq.q, r: hq.r });
       if (distance < bestDistance) {

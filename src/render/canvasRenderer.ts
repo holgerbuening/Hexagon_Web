@@ -1,3 +1,4 @@
+import { UNIT_TYPES } from "../core/units/unitType";
 import type { PlayerId,Axial, GameState, HexTile } from "../core/types";
 import { FieldType } from "../core/map/fieldTypes";
 import { axialToPixel } from "../core/hexMath";
@@ -476,30 +477,13 @@ export class CanvasRenderer {
   }
 
   private loadUnitSprites(): void {
-    let img = new Image();
-    img.src = "/images/units/infantry.png";
-    this.unitImages.set("infantry", img);
-    img = new Image();
-    img.src = "/images/units/militarybase.png";
-    this.unitImages.set("militarybase", img);
-    img = new Image();
-    img.src = "/images/units/machinegun.png";
-    this.unitImages.set("machinegun", img);
-    img = new Image();
-    img.src = "/images/units/medic.png";
-    this.unitImages.set("medic", img);
-    img = new Image();
-    img.src = "/images/units/artillery.png";
-    this.unitImages.set("artillery", img);
-    img = new Image();
-    img.src = "/images/units/cavalry.png";
-    this.unitImages.set("cavalry", img);
-    img = new Image();
-    img.src = "/images/units/tank.png";
-    this.unitImages.set("tank", img);
-    img = new Image();
-    img.src = "/images/units/engineer.png";
-    this.unitImages.set("engineer", img);
+    for (const data of Object.values(UNIT_TYPES)) {
+      const img = new Image();
+      img.onload = this.handleAssetLoaded.bind(this);
+      img.onerror = this.handleAssetLoaded.bind(this);
+      img.src = `/images/units/${data.spriteKey}.png`;
+      this.unitImages.set(data.spriteKey, img);
+    }
   }
 
   private getFlagImage(owner: PlayerId): HTMLImageElement {

@@ -1,3 +1,4 @@
+import { isHeadquarter } from "../units/unitType";
 import type { SavedGameState, SavedUnit } from "../types";
 import { Unit } from "../units/unit";
 import { UnitType, UNIT_TYPES } from "../units/unitType";
@@ -134,7 +135,7 @@ export function missionIssues(mission: MissionDocument): string[] {
   try { parseMission(mission); } catch (error) { return [error instanceof Error ? error.message : String(error)]; }
   if (!mission.title.trim()) issues.push("A mission title is required.");
   for (const owner of [0, 1]) {
-    if (!mission.state.units.some(u => u.owner === owner && u.type === UnitType.MilitaryBase)) {
+    if (!mission.state.units.some(u => u.owner === owner && isHeadquarter(u.type))) {
       issues.push(`An HQ for ${owner === 0 ? "the player" : "the AI"} is missing.`);
     }
   }

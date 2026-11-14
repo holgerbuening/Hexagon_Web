@@ -1,6 +1,7 @@
 export enum UnitType {
   Infantry = "infantry",
   MilitaryBase = "militarybase",
+  MilitaryBaseFortified = "militarybasefortified",
   MachnineGun = "machinegun",
   Medic = "medic",
   Tank = "tank",
@@ -40,6 +41,16 @@ export const UNIT_TYPES: Record<UnitType, UnitTypeData> = {
     maxHP: 100,
     spriteKey: "militarybase",
     price: 0
+  },
+  [UnitType.MilitaryBaseFortified]: {
+    name: "Fortified Military Base",
+    maxMovement: 0,
+    offense: 0,
+    defense: 200,
+    attackRange: 0,
+    maxHP: 100,
+    spriteKey: "militarybaseFortified",
+    price: 400
   },
   [UnitType.MachnineGun]: {
     name: "Machine Gun",
@@ -103,3 +114,7 @@ export const UNIT_TYPES: Record<UnitType, UnitTypeData> = {
   }
 
 };
+
+export function isHeadquarter(type: UnitType): boolean {
+  return type === UnitType.MilitaryBase || type === UnitType.MilitaryBaseFortified;
+}
