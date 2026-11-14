@@ -1,0 +1,519 @@
+{
+  "gamesPerBatch": 40,
+  "maxTurns": 240,
+  "rows": [
+    {
+      "phase": "screening",
+      "strategy": "immediate",
+      "opponent": "never",
+      "difficulty": "normal",
+      "width": 12,
+      "height": 10,
+      "seed": 101,
+      "result": {
+        "games": 40,
+        "winsA": 18,
+        "winsB": 18,
+        "draws": 4,
+        "averageTurns": 51.45,
+        "averageAiMilliseconds": 71.7837072750002,
+        "upgradesA": 28,
+        "upgradesB": 0,
+        "gamesWithUpgradeA": 28,
+        "gamesWithUpgradeB": 0,
+        "averageFirstUpgradeTurnA": 16.607142857142858,
+        "averageFirstUpgradeTurnB": null
+      }
+    },
+    {
+      "phase": "screening",
+      "strategy": "immediate",
+      "opponent": "never",
+      "difficulty": "normal",
+      "width": 20,
+      "height": 20,
+      "seed": 101,
+      "result": {
+        "games": 40,
+        "winsA": 19,
+        "winsB": 18,
+        "draws": 3,
+        "averageTurns": 79.775,
+        "averageAiMilliseconds": 838.3848445749998,
+        "upgradesA": 39,
+        "upgradesB": 0,
+        "gamesWithUpgradeA": 39,
+        "gamesWithUpgradeB": 0,
+        "averageFirstUpgradeTurnA": 10.564102564102564,
+        "averageFirstUpgradeTurnB": null
+      }
+    },
+    {
+      "phase": "screening",
+      "strategy": "reserve",
+      "opponent": "never",
+      "difficulty": "normal",
+      "width": 12,
+      "height": 10,
+      "seed": 101,
+      "result": {
+        "games": 40,
+        "winsA": 18,
+        "winsB": 17,
+        "draws": 5,
+        "averageTurns": 57.525,
+        "averageAiMilliseconds": 69.99996857499828,
+        "upgradesA": 14,
+        "upgradesB": 0,
+        "gamesWithUpgradeA": 14,
+        "gamesWithUpgradeB": 0,
+        "averageFirstUpgradeTurnA": 43.142857142857146,
+        "averageFirstUpgradeTurnB": null
+      }
+    },
+    {
+      "phase": "screening",
+      "strategy": "reserve",
+      "opponent": "never",
+      "difficulty": "normal",
+      "width": 20,
+      "height": 20,
+      "seed": 101,
+      "result": {
+        "games": 40,
+        "winsA": 16,
+        "winsB": 21,
+        "draws": 3,
+        "averageTurns": 91.125,
+        "averageAiMilliseconds": 1003.6936841249939,
+        "upgradesA": 39,
+        "upgradesB": 0,
+        "gamesWithUpgradeA": 39,
+        "gamesWithUpgradeB": 0,
+        "averageFirstUpgradeTurnA": 16.82051282051282,
+        "averageFirstUpgradeTurnB": null
+      }
+    },
+    {
+      "phase": "screening",
+      "strategy": "threatened",
+      "opponent": "never",
+      "difficulty": "normal",
+      "width": 12,
+      "height": 10,
+      "seed": 101,
+      "result": {
+        "games": 40,
+        "winsA": 18,
+        "winsB": 17,
+        "draws": 5,
+        "averageTurns": 57.325,
+        "averageAiMilliseconds": 70.21591039999839,
+        "upgradesA": 11,
+        "upgradesB": 0,
+        "gamesWithUpgradeA": 11,
+        "gamesWithUpgradeB": 0,
+        "averageFirstUpgradeTurnA": 48.27272727272727,
+        "averageFirstUpgradeTurnB": null
+      }
+    },
+    {
+      "phase": "screening",
+      "strategy": "threatened",
+      "opponent": "never",
+      "difficulty": "normal",
+      "width": 20,
+      "height": 20,
+      "seed": 101,
+      "result": {
+        "games": 40,
+        "winsA": 15,
+        "winsB": 25,
+        "draws": 0,
+        "averageTurns": 74.525,
+        "averageAiMilliseconds": 713.069873125005,
+        "upgradesA": 28,
+        "upgradesB": 0,
+        "gamesWithUpgradeA": 28,
+        "gamesWithUpgradeB": 0,
+        "averageFirstUpgradeTurnA": 26.357142857142858,
+        "averageFirstUpgradeTurnB": null
+      }
+    },
+    {
+      "phase": "screening",
+      "strategy": "late",
+      "opponent": "never",
+      "difficulty": "normal",
+      "width": 12,
+      "height": 10,
+      "seed": 101,
+      "result": {
+        "games": 40,
+        "winsA": 18,
+        "winsB": 18,
+        "draws": 4,
+        "averageTurns": 50.6,
+        "averageAiMilliseconds": 55.03353354999017,
+        "upgradesA": 3,
+        "upgradesB": 0,
+        "gamesWithUpgradeA": 3,
+        "gamesWithUpgradeB": 0,
+        "averageFirstUpgradeTurnA": 82,
+        "averageFirstUpgradeTurnB": null
+      }
+    },
+    {
+      "phase": "screening",
+      "strategy": "late",
+      "opponent": "never",
+      "difficulty": "normal",
+      "width": 20,
+      "height": 20,
+      "seed": 101,
+      "result": {
+        "games": 40,
+        "winsA": 19,
+        "winsB": 19,
+        "draws": 2,
+        "averageTurns": 77.325,
+        "averageAiMilliseconds": 871.8892436999646,
+        "upgradesA": 17,
+        "upgradesB": 0,
+        "gamesWithUpgradeA": 17,
+        "gamesWithUpgradeB": 0,
+        "averageFirstUpgradeTurnA": 45.529411764705884,
+        "averageFirstUpgradeTurnB": null
+      }
+    },
+    {
+      "phase": "validation",
+      "strategy": "immediate",
+      "opponent": "never",
+      "difficulty": "normal",
+      "width": 12,
+      "height": 10,
+      "seed": 10101,
+      "result": {
+        "games": 40,
+        "winsA": 17,
+        "winsB": 20,
+        "draws": 3,
+        "averageTurns": 44.45,
+        "averageAiMilliseconds": 49.96189442498435,
+        "upgradesA": 27,
+        "upgradesB": 0,
+        "gamesWithUpgradeA": 27,
+        "gamesWithUpgradeB": 0,
+        "averageFirstUpgradeTurnA": 18.22222222222222,
+        "averageFirstUpgradeTurnB": null
+      }
+    },
+    {
+      "phase": "validation",
+      "strategy": "immediate",
+      "opponent": "never",
+      "difficulty": "normal",
+      "width": 20,
+      "height": 20,
+      "seed": 10101,
+      "result": {
+        "games": 40,
+        "winsA": 14,
+        "winsB": 23,
+        "draws": 3,
+        "averageTurns": 83.825,
+        "averageAiMilliseconds": 809.1811151749869,
+        "upgradesA": 40,
+        "upgradesB": 0,
+        "gamesWithUpgradeA": 40,
+        "gamesWithUpgradeB": 0,
+        "averageFirstUpgradeTurnA": 10.55,
+        "averageFirstUpgradeTurnB": null
+      }
+    },
+    {
+      "phase": "validation",
+      "strategy": "immediate",
+      "opponent": "never",
+      "difficulty": "hard",
+      "width": 12,
+      "height": 10,
+      "seed": 10101,
+      "result": {
+        "games": 40,
+        "winsA": 15,
+        "winsB": 22,
+        "draws": 3,
+        "averageTurns": 52.2,
+        "averageAiMilliseconds": 60.29212097498748,
+        "upgradesA": 33,
+        "upgradesB": 0,
+        "gamesWithUpgradeA": 33,
+        "gamesWithUpgradeB": 0,
+        "averageFirstUpgradeTurnA": 11.545454545454545,
+        "averageFirstUpgradeTurnB": null
+      }
+    },
+    {
+      "phase": "validation",
+      "strategy": "immediate",
+      "opponent": "never",
+      "difficulty": "hard",
+      "width": 20,
+      "height": 20,
+      "seed": 10101,
+      "result": {
+        "games": 40,
+        "winsA": 20,
+        "winsB": 17,
+        "draws": 3,
+        "averageTurns": 91.25,
+        "averageAiMilliseconds": 1126.99180982502,
+        "upgradesA": 40,
+        "upgradesB": 0,
+        "gamesWithUpgradeA": 40,
+        "gamesWithUpgradeB": 0,
+        "averageFirstUpgradeTurnA": 7.8,
+        "averageFirstUpgradeTurnB": null
+      }
+    },
+    {
+      "phase": "validation",
+      "strategy": "late",
+      "opponent": "never",
+      "difficulty": "normal",
+      "width": 12,
+      "height": 10,
+      "seed": 10101,
+      "result": {
+        "games": 40,
+        "winsA": 18,
+        "winsB": 18,
+        "draws": 4,
+        "averageTurns": 45.4,
+        "averageAiMilliseconds": 49.17618717500882,
+        "upgradesA": 4,
+        "upgradesB": 0,
+        "gamesWithUpgradeA": 4,
+        "gamesWithUpgradeB": 0,
+        "averageFirstUpgradeTurnA": 36.75,
+        "averageFirstUpgradeTurnB": null
+      }
+    },
+    {
+      "phase": "validation",
+      "strategy": "late",
+      "opponent": "never",
+      "difficulty": "normal",
+      "width": 20,
+      "height": 20,
+      "seed": 10101,
+      "result": {
+        "games": 40,
+        "winsA": 19,
+        "winsB": 18,
+        "draws": 3,
+        "averageTurns": 81.475,
+        "averageAiMilliseconds": 783.6715698500193,
+        "upgradesA": 22,
+        "upgradesB": 0,
+        "gamesWithUpgradeA": 22,
+        "gamesWithUpgradeB": 0,
+        "averageFirstUpgradeTurnA": 50.68181818181818,
+        "averageFirstUpgradeTurnB": null
+      }
+    },
+    {
+      "phase": "validation",
+      "strategy": "late",
+      "opponent": "never",
+      "difficulty": "hard",
+      "width": 12,
+      "height": 10,
+      "seed": 10101,
+      "result": {
+        "games": 40,
+        "winsA": 18,
+        "winsB": 18,
+        "draws": 4,
+        "averageTurns": 55.75,
+        "averageAiMilliseconds": 64.50850509996963,
+        "upgradesA": 6,
+        "upgradesB": 0,
+        "gamesWithUpgradeA": 6,
+        "gamesWithUpgradeB": 0,
+        "averageFirstUpgradeTurnA": 54.333333333333336,
+        "averageFirstUpgradeTurnB": null
+      }
+    },
+    {
+      "phase": "validation",
+      "strategy": "late",
+      "opponent": "never",
+      "difficulty": "hard",
+      "width": 20,
+      "height": 20,
+      "seed": 10101,
+      "result": {
+        "games": 40,
+        "winsA": 14,
+        "winsB": 17,
+        "draws": 9,
+        "averageTurns": 110.4,
+        "averageAiMilliseconds": 1335.7839412500311,
+        "upgradesA": 38,
+        "upgradesB": 0,
+        "gamesWithUpgradeA": 38,
+        "gamesWithUpgradeB": 0,
+        "averageFirstUpgradeTurnA": 24.842105263157894,
+        "averageFirstUpgradeTurnB": null
+      }
+    },
+    {
+      "phase": "head-to-head",
+      "strategy": "immediate",
+      "opponent": "late",
+      "difficulty": "normal",
+      "width": 12,
+      "height": 10,
+      "seed": 20101,
+      "result": {
+        "games": 40,
+        "winsA": 16,
+        "winsB": 20,
+        "draws": 4,
+        "averageTurns": 56.25,
+        "averageAiMilliseconds": 70.78106625001237,
+        "upgradesA": 28,
+        "upgradesB": 2,
+        "gamesWithUpgradeA": 28,
+        "gamesWithUpgradeB": 2,
+        "averageFirstUpgradeTurnA": 11.392857142857142,
+        "averageFirstUpgradeTurnB": 27.5
+      }
+    },
+    {
+      "phase": "head-to-head",
+      "strategy": "immediate",
+      "opponent": "late",
+      "difficulty": "normal",
+      "width": 20,
+      "height": 20,
+      "seed": 20101,
+      "result": {
+        "games": 40,
+        "winsA": 19,
+        "winsB": 18,
+        "draws": 3,
+        "averageTurns": 95.95,
+        "averageAiMilliseconds": 1262.86239442496,
+        "upgradesA": 40,
+        "upgradesB": 23,
+        "gamesWithUpgradeA": 40,
+        "gamesWithUpgradeB": 23,
+        "averageFirstUpgradeTurnA": 10.3,
+        "averageFirstUpgradeTurnB": 48.52173913043478
+      }
+    },
+    {
+      "phase": "head-to-head",
+      "strategy": "immediate",
+      "opponent": "late",
+      "difficulty": "hard",
+      "width": 12,
+      "height": 10,
+      "seed": 20101,
+      "result": {
+        "games": 40,
+        "winsA": 16,
+        "winsB": 22,
+        "draws": 2,
+        "averageTurns": 57.925,
+        "averageAiMilliseconds": 128.16305565002259,
+        "upgradesA": 34,
+        "upgradesB": 6,
+        "gamesWithUpgradeA": 34,
+        "gamesWithUpgradeB": 6,
+        "averageFirstUpgradeTurnA": 7.970588235294118,
+        "averageFirstUpgradeTurnB": 49
+      }
+    },
+    {
+      "phase": "head-to-head",
+      "strategy": "immediate",
+      "opponent": "late",
+      "difficulty": "hard",
+      "width": 20,
+      "height": 20,
+      "seed": 20101,
+      "result": {
+        "games": 40,
+        "winsA": 16,
+        "winsB": 18,
+        "draws": 6,
+        "averageTurns": 105.075,
+        "averageAiMilliseconds": 1644.3375425250283,
+        "upgradesA": 40,
+        "upgradesB": 39,
+        "gamesWithUpgradeA": 40,
+        "gamesWithUpgradeB": 39,
+        "averageFirstUpgradeTurnA": 7.65,
+        "averageFirstUpgradeTurnB": 26.41025641025641
+      }
+    }
+  ],
+  "strategies": {
+    "immediate": {
+      "hqUpgradeMinArmy": 0,
+      "hqUpgradeReserve": 0,
+      "hqUpgradeThreatDistance": 100,
+      "hqUpgradeSavingTurns": 2
+    },
+    "reserve": {
+      "hqUpgradeMinArmy": 3,
+      "hqUpgradeReserve": 150,
+      "hqUpgradeThreatDistance": 100,
+      "hqUpgradeSavingTurns": 1
+    },
+    "threatened": {
+      "hqUpgradeMinArmy": 3,
+      "hqUpgradeReserve": 150,
+      "hqUpgradeThreatDistance": 8,
+      "hqUpgradeSavingTurns": 1
+    },
+    "late": {
+      "hqUpgradeMinArmy": 6,
+      "hqUpgradeReserve": 400,
+      "hqUpgradeThreatDistance": 100,
+      "hqUpgradeSavingTurns": 0
+    }
+  },
+  "finalPolicyCheck": {
+    "seed": 30101,
+    "gamesPerBatch": 40,
+    "difficulty": "normal",
+    "maxTurns": 240,
+    "rows": [
+      {
+        "width": 12,
+        "height": 10,
+        "wins": 19,
+        "losses": 19,
+        "draws": 2,
+        "gamesWithUpgrade": 2,
+        "averageFirstUpgradeTurn": 58.5
+      },
+      {
+        "width": 20,
+        "height": 20,
+        "wins": 16,
+        "losses": 21,
+        "draws": 3,
+        "gamesWithUpgrade": 22,
+        "averageFirstUpgradeTurn": 44.0
+      }
+    ]
+  },
+  "upgradePrice": 400
+}

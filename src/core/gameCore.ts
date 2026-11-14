@@ -10,7 +10,7 @@ import {
   type CombatPreviewEntry,
   type SavedGameState,
 } from "./types";
-import  { Unit } from "./units/unit";
+import  { Unit, fortifyHeadquarter } from "./units/unit";
 import  { UnitType } from "./units/unitType";
 import { UNIT_TYPES } from "./units/unitType";
 import { FieldType, getFieldDef } from "./map/fieldTypes";
@@ -614,11 +614,7 @@ export class GameCore {
         !this.state.units.includes(hqUnit) || !isHeadquarter(hqUnit.type)) return false;
     if (unitType === UnitType.MilitaryBaseFortified) {
       if (hqUnit.type !== UnitType.MilitaryBase || !this.spend(hqUnit.owner, UNIT_TYPES[unitType].price)) return false;
-      const fortified = new Unit(unitType, hqUnit.q, hqUnit.r, hqUnit.owner);
-      fortified.maxHP = hqUnit.maxHP;
-      fortified.hp = hqUnit.hp;
-      fortified.experience = hqUnit.experience;
-      fortified.acted = true;
+      const fortified = fortifyHeadquarter(hqUnit);
       this.state.units[this.state.units.indexOf(hqUnit)] = fortified;
       this.cancelPurchase();
       this.clearSelectionAndOverlays(false);

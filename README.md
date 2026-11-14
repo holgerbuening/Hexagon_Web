@@ -125,6 +125,8 @@ Random numbers in map generation, start units and combat come from an injectable
 
 - `npm test` runs the unit tests in `tests/`.
 - `npm run simulate -- --games 100 --seed 1` lets two AIs play against each other headlessly and prints win rates, average game length and AI time. Use `--a` and `--b` to pick the difficulty of each side (`easy`, `normal`, `hard`), `--a-income` / `--a-set threatWeight=1.5` (and the same for `--b`) to override single profile settings, and `npm run simulate -- --help` for all options.
+- `--paired` plays each map twice with starting sides swapped. Upgrade counts and average first-upgrade turns are included in the report.
+- `npm run simulate -- --upgrade-study --games 40 --seed 101 --max-turns 240` screens four HQ-upgrade strategies, then tests the two finalists on fresh maps at normal and hard difficulty. Results are saved to `.sim-build/hq-upgrade-study.json`. See [HQ upgrade study](docs/KI-HQ-UPGRADE.md).
 - `npm run typecheck:tools` type-checks the tests and the simulation tool.
 
 ---

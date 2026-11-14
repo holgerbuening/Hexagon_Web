@@ -87,3 +87,14 @@ export class Unit {
     return unit;
   }
 }
+
+/** Shared by player and AI upgrades; fortification never repairs existing damage. */
+export function fortifyHeadquarter(base: Unit): Unit {
+  if (base.type !== UnitType.MilitaryBase) throw new Error("Only a basic military base can be fortified.");
+  const fortified = new Unit(UnitType.MilitaryBaseFortified, base.q, base.r, base.owner);
+  fortified.maxHP = base.maxHP;
+  fortified.hp = base.hp;
+  fortified.experience = base.experience;
+  fortified.acted = true;
+  return fortified;
+}

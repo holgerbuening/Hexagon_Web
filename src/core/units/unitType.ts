@@ -50,7 +50,7 @@ export const UNIT_TYPES: Record<UnitType, UnitTypeData> = {
     attackRange: 0,
     maxHP: 100,
     spriteKey: "militarybaseFortified",
-    price: 400
+    price: 250
   },
   [UnitType.MachnineGun]: {
     name: "Machine Gun",

@@ -1,3 +1,6 @@
+import { writeFileSync } from "node:fs";
+import { UNIT_TYPES, UnitType } from "../src/core/units/unitType";
+import { runUpgradeStudy } from "./upgradeStudy";
 import { runBatch } from "./simulation";
 import { aiProfiles, type AiDifficulty, type AiProfile } from "../src/core/systems/aiSystem";
 
@@ -16,6 +19,9 @@ Usage: npm run simulate -- [options]
   --b-income <x>    override the income multiplier of side B
   --a-set <k=v,..>  override profile settings of side A, e.g. threatWeight=1.5,defendHeadquarter=false
   --b-set <k=v,..>  override profile settings of side B
+  --upgrade-study   compare four HQ upgrade strategies, then validate finalists on fresh seeds
+  --report <path>   write result JSON (study default: .sim-build/hq-upgrade-study.json)
+  --paired          play every map twice with swapped starting sides (even --games)
   --verbose         print every game
   --help            show this text
 
@@ -27,7 +33,7 @@ function readOptions(argv: string[]): Map<string, string> {
     const arg = argv[i]!;
     if (!arg.startsWith("--")) throw new Error(`Unexpected argument: ${arg}`);
     const name = arg.slice(2);
-    if (name === "verbose" || name === "help") {
+    if (name === "verbose" || name === "help" || name === "paired" || name === "upgrade-study") {
       options.set(name, "true");
       continue;
     }
@@ -60,7 +66,14 @@ function profileOption(options: Map<string, string>, side: "a" | "b"): { label: 
     const [key, raw] = entry.split("=");
     if (!key || raw === undefined || !(key in profile)) throw new Error(`--${side}-set: unknown setting "${entry}"`);
     const target = profile as unknown as Record<string, number | boolean>;
-    target[key] = typeof base[key as keyof AiProfile] === "boolean" ? raw === "true" : Number(raw);
+    if (typeof base[key as keyof AiProfile] === "boolean") {
+      if (raw !== "true" && raw !== "false") throw new Error(`--${side}-set: ${key} requires true or false`);
+      target[key] = raw === "true";
+    } else {
+      const value = Number(raw);
+      if (!Number.isFinite(value) || value < 0) throw new Error(`--${side}-set: ${key} requires a non-negative number`);
+      target[key] = value;
+    }
     changes.push(entry);
   }
 
@@ -76,11 +89,17 @@ function main(): void {
   }
 
   const games = numberOption(options, "games", 50);
-  if (games < 1) throw new Error("--games must be at least 1");
+  if (!Number.isInteger(games) || games < 1) throw new Error("--games must be at least 1");
+  if ((options.has("paired") || options.has("upgrade-study")) && games % 2) throw new Error("--paired requires an even --games count");
+  if (options.has("upgrade-study")) {
+    runUpgradeStudy(games, numberOption(options, "seed", 1), numberOption(options, "max-turns", 240), options.get("report") ?? ".sim-build/hq-upgrade-study.json");
+    return;
+  }
   const sideA = profileOption(options, "a");
   const sideB = profileOption(options, "b");
   const config = {
     games,
+    paired: options.has("paired"),
     seed: numberOption(options, "seed", 1),
     width: numberOption(options, "width", 20),
     height: numberOption(options, "height", 20),
@@ -96,6 +115,8 @@ function main(): void {
     console.log(`game ${index + 1} seed ${game.seed}: ${winner} after ${game.turns} turns`);
   });
 
+  const report = options.get("report");
+  if (report) writeFileSync(report, JSON.stringify({ upgradePrice: UNIT_TYPES[UnitType.MilitaryBaseFortified].price, config, result }, null, 2));
   const percent = (count: number) => ((count / result.games) * 100).toFixed(1);
   console.log(
     `Games: ${result.games} (seed ${config.seed}, ${config.width}x${config.height}, A ${sideA.label} / B ${sideB.label})`
@@ -104,6 +125,9 @@ function main(): void {
   console.log(`B wins: ${result.winsB} (${percent(result.winsB)}%)`);
   console.log(`Draws:  ${result.draws} (${percent(result.draws)}%)`);
   console.log(`Average turns: ${result.averageTurns.toFixed(1)}`);
+  const firstUpgrade = (turn: number | null) => turn === null ? "none" : turn.toFixed(1);
+  console.log(`HQ upgrades A: ${result.upgradesA} (${result.gamesWithUpgradeA} games, average first turn ${firstUpgrade(result.averageFirstUpgradeTurnA)})`);
+  console.log(`HQ upgrades B: ${result.upgradesB} (${result.gamesWithUpgradeB} games, average first turn ${firstUpgrade(result.averageFirstUpgradeTurnB)})`);
   console.log(`Average AI time per game: ${result.averageAiMilliseconds.toFixed(1)} ms`);
 }
 

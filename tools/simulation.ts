@@ -54,6 +54,8 @@ export interface GameResult {
   winner: PlayerId | null;
   turns: number;
   aiMilliseconds: number;
+  hqUpgrades: [number, number];
+  firstHqUpgradeTurn: [number | null, number | null];
 }
 
 /** Plays one game with an AI controlling both players. Same config gives the same result. */
@@ -84,11 +86,16 @@ export function playGame(config: GameConfig): GameResult {
   const state = game.getState();
 
   let aiMilliseconds = 0;
+  const hqUpgrades: [number, number] = [0, 0];
+  const firstHqUpgradeTurn: [number | null, number | null] = [null, null];
   while (!state.gameOver && state.turn < config.maxTurns) {
     const player = state.currentPlayer;
     const started = performance.now();
     const previews = runAiTurn(game, ais[player]!);
     aiMilliseconds += performance.now() - started;
+    const upgraded = ais[player]!.upgradedHeadquarters.length;
+    hqUpgrades[player] += upgraded;
+    if (upgraded && firstHqUpgradeTurn[player] === null) firstHqUpgradeTurn[player] = state.turn;
 
     for (const entry of previews) {
       game.applyCombat(entry.preview);
@@ -105,7 +112,7 @@ export function playGame(config: GameConfig): GameResult {
     seed: config.seed,
     winner: state.gameOver ? state.winner : null,
     turns: state.turn,
-    aiMilliseconds,
+    aiMilliseconds, hqUpgrades, firstHqUpgradeTurn,
   };
 }
 
@@ -118,6 +125,7 @@ export interface BatchConfig {
   /** AI profile of side A and side B. */
   profileA: AiProfile;
   profileB: AiProfile;
+  paired?: boolean;
 }
 
 export interface BatchResult {
@@ -127,11 +135,17 @@ export interface BatchResult {
   draws: number;
   averageTurns: number;
   averageAiMilliseconds: number;
+  upgradesA: number;
+  upgradesB: number;
+  gamesWithUpgradeA: number;
+  gamesWithUpgradeB: number;
+  averageFirstUpgradeTurnA: number | null;
+  averageFirstUpgradeTurnB: number | null;
 }
 
 /**
- * Side A plays as player 0 in even games and as player 1 in odd games,
- * which cancels out any advantage of a start side.
+ * Side A alternates starting sides. With paired=true, each seed is replayed
+ * with sides swapped so map and starting-side advantages are balanced.
  */
 export function runBatch(
   config: BatchConfig,
@@ -142,11 +156,12 @@ export function runBatch(
   let draws = 0;
   let turns = 0;
   let aiMilliseconds = 0;
+  const upgrades = [0, 0]; const gamesWithUpgrade = [0, 0]; const firstUpgradeTurns = [0, 0];
 
   for (let i = 0; i < config.games; i++) {
     const aIsPlayer0 = i % 2 === 0;
     const result = playGame({
-      seed: config.seed + i,
+      seed: config.seed + (config.paired ? Math.floor(i / 2) : i),
       width: config.width,
       height: config.height,
       maxTurns: config.maxTurns,
@@ -160,6 +175,12 @@ export function runBatch(
     } else {
       winsB++;
     }
+    for (const side of [0, 1] as const) {
+      const player = (aIsPlayer0 ? side : 1 - side) as PlayerId;
+      upgrades[side]! += result.hqUpgrades[player];
+      const first = result.firstHqUpgradeTurn[player];
+      if (first !== null) { gamesWithUpgrade[side]!++; firstUpgradeTurns[side]! += first; }
+    }
     turns += result.turns;
     aiMilliseconds += result.aiMilliseconds;
     onGame?.(i, result, aIsPlayer0);
@@ -172,5 +193,8 @@ export function runBatch(
     draws,
     averageTurns: turns / config.games,
     averageAiMilliseconds: aiMilliseconds / config.games,
+    upgradesA: upgrades[0]!, upgradesB: upgrades[1]!, gamesWithUpgradeA: gamesWithUpgrade[0]!, gamesWithUpgradeB: gamesWithUpgrade[1]!,
+    averageFirstUpgradeTurnA: gamesWithUpgrade[0] ? firstUpgradeTurns[0]! / gamesWithUpgrade[0] : null,
+    averageFirstUpgradeTurnB: gamesWithUpgrade[1] ? firstUpgradeTurns[1]! / gamesWithUpgrade[1] : null,
   };
 }

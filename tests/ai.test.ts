@@ -10,7 +10,7 @@ import { MovementSystem } from "../src/core/systems/movementSystem";
 import { Unit } from "../src/core/units/unit";
 import { UnitType } from "../src/core/units/unitType";
 import type { GameState, PlayerId } from "../src/core/types";
-import { playGame, runAiTurn } from "../tools/simulation";
+import { playGame, runAiTurn, runBatch } from "../tools/simulation";
 
 describe("seeded random numbers", () => {
   it("repeats the same sequence for the same seed", () => {
@@ -298,6 +298,129 @@ describe("AI turn", () => {
     assert.equal(ownUnits(state, UnitType.Engineer).length, 0);
   });
 
+  describe("headquarter upgrades", () => {
+    const build = (balance = 600, armySize = 3, nearby = true, overrides: Partial<AiProfile> = {}) => {
+      const scenario = createScenario(place => {
+        const enemy = nearby ? place(2, 8) : place(9, 0);
+        const units = [new Unit(UnitType.Infantry, enemy.q, enemy.r, 0)];
+        for (let i = 0; i < armySize; i++) {
+          const pos = place(3 + i, 6);
+          units.push(new Unit(UnitType.Infantry, pos.q, pos.r, 1));
+        }
+        return units;
+      }, balance, { ...aiProfiles.normal, hqUpgradeMinArmy: 3, hqUpgradeReserve: 150,
+        hqUpgradeThreatDistance: 8, hqUpgradeSavingTurns: 1, ...overrides });
+      const hq = scenario.state.units.find(u => u.owner === 1 && u.type === UnitType.MilitaryBase)!;
+      return { ...scenario, hq };
+    };
+
+    it("the default policy invests only after funding six troops and a 400 reserve", () => {
+      const parameters = {
+        hqUpgradeMinArmy: aiProfiles.normal.hqUpgradeMinArmy,
+        hqUpgradeReserve: aiProfiles.normal.hqUpgradeReserve,
+        hqUpgradeThreatDistance: aiProfiles.normal.hqUpgradeThreatDistance,
+        hqUpgradeSavingTurns: aiProfiles.normal.hqUpgradeSavingTurns,
+      };
+      assert.deepEqual(parameters, { hqUpgradeMinArmy: 6, hqUpgradeReserve: 400, hqUpgradeThreatDistance: 100, hqUpgradeSavingTurns: 0 });
+      const ready = build(650, 6, false, parameters);
+      runAiTurn(ready.game, ready.ai);
+      assert.equal(ready.game.getUnitAt(ready.hq)!.type, UnitType.MilitaryBaseFortified);
+      const early = build(650, 3, true, parameters);
+      runAiTurn(early.game, early.ai);
+      assert.equal(early.game.getUnitAt(early.hq)!.type, UnitType.MilitaryBase);
+      const short = build(649, 6, false, parameters);
+      runAiTurn(short.game, short.ai);
+      assert.equal(short.game.getUnitAt(short.hq)!.type, UnitType.MilitaryBase);
+      assert.ok(short.game.getBalance(1) < 649);
+    });
+
+    it("supports an early upgrade for exactly 250 without an army or cash reserve", () => {
+      const { game, ai, hq } = build(250, 0, true, { hqUpgradeMinArmy: 0, hqUpgradeReserve: 0,
+        hqUpgradeThreatDistance: 100, hqUpgradeSavingTurns: 2 });
+      runAiTurn(game, ai);
+      assert.equal(game.getUnitAt(hq)!.type, UnitType.MilitaryBaseFortified);
+      assert.equal(game.getBalance(1), 0);
+    });
+
+    it("limits early-upgrade saving to two income turns instead of blocking troop purchases indefinitely", () => {
+      const early = { hqUpgradeMinArmy: 0, hqUpgradeReserve: 0, hqUpgradeThreatDistance: 100, hqUpgradeSavingTurns: 2 };
+      const saving = build(230, 0, true, early);
+      runAiTurn(saving.game, saving.ai);
+      assert.equal(saving.game.getBalance(1), 230);
+      saving.game.addBalance(1, 15); runAiTurn(saving.game, saving.ai);
+      assert.equal(saving.game.getBalance(1), 245);
+      saving.game.addBalance(1, 15); runAiTurn(saving.game, saving.ai);
+      assert.equal(saving.game.getUnitAt(saving.hq)!.type, UnitType.MilitaryBaseFortified);
+      const poor = build(150, 0, true, early);
+      runAiTurn(poor.game, poor.ai);
+      assert.equal(poor.game.getUnitAt(poor.hq)!.type, UnitType.MilitaryBase);
+      assert.ok(poor.game.getBalance(1) < 150);
+    });
+
+    it("fortifies a threatened HQ once the army and reserve are funded, without repairing damage", () => {
+      const { game, state, ai, hq } = build(); hq.hp = 65; hq.experience = 2;
+      const existing = new Set(state.units);
+      runAiTurn(game, ai);
+      const fortified = game.getUnitAt(hq)!;
+      assert.equal(fortified.type, UnitType.MilitaryBaseFortified);
+      assert.equal(fortified.defense, 200); assert.equal(fortified.hp, 65); assert.equal(fortified.experience, 2);
+      assert.equal(ai.upgradedHeadquarters.length, 1);
+      assert.deepEqual(ai.purchaseHeadquarters[0], { q: hq.q, r: hq.r });
+      const troopsSpent = state.units.filter(u => u.owner === 1 && !existing.has(u) && u !== fortified).reduce((sum, u) => sum + u.data.price, 0);
+      assert.equal(game.getBalance(1), 600 - 250 - troopsSpent);
+      game.addBalance(1, 1000); runAiTurn(game, ai);
+      assert.equal(ai.upgradedHeadquarters.length, 0);
+    });
+
+    for (const [label, balance, army, nearby, overrides] of [
+      ["too little money", 249, 3, true, {}],
+      ["too few combat troops", 600, 1, true, {}],
+      ["no nearby threat", 600, 3, false, {}],
+      ["upgrades disabled", 600, 3, true, { hqUpgradeEnabled: false }],
+    ] as const) {
+      it(`keeps buying troops instead of upgrading with ${label}`, () => {
+        const { game, ai, hq } = build(balance, army, nearby, overrides);
+        runAiTurn(game, ai);
+        assert.equal(game.getUnitAt(hq)!.type, UnitType.MilitaryBase);
+        assert.equal(ai.upgradedHeadquarters.length, 0);
+        assert.ok(game.getBalance(1) < balance);
+      });
+    }
+
+    it("does not downgrade a custom HQ whose defense is already stronger", () => {
+      const { game, ai, hq } = build(); hq.defense = 250;
+      runAiTurn(game, ai);
+      assert.equal(game.getUnitAt(hq)!.type, UnitType.MilitaryBase);
+      assert.equal(hq.defense, 250);
+    });
+
+    it("saves at most the configured income horizon and then upgrades", () => {
+      const { game, state, ai, hq } = build(390);
+      const count = state.units.length;
+      runAiTurn(game, ai);
+      assert.equal(game.getBalance(1), 390); assert.equal(state.units.length, count);
+      game.addBalance(1, 15);
+      runAiTurn(game, ai);
+      assert.equal(game.getUnitAt(hq)!.type, UnitType.MilitaryBaseFortified);
+    });
+
+    it("still fortifies against ranged fire across water", () => {
+      const { game, state, ai, hq } = build();
+      const infantry = state.units.find(u => u.owner === 0 && u.type === UnitType.Infantry)!;
+      state.units[state.units.indexOf(infantry)] = new Unit(UnitType.Artillery, infantry.q, infantry.r, 0);
+      for (const tile of state.tiles) if (axialDistance(tile, hq) === 1) tile.field = FieldType.Ocean;
+      runAiTurn(game, ai);
+      assert.equal(game.getUnitAt(hq)!.type, UnitType.MilitaryBaseFortified);
+    });
+
+    it("ignores a melee threat isolated behind water", () => {
+      const { game, state, ai, hq } = build();
+      for (const tile of state.tiles) if (axialDistance(tile, hq) === 1) tile.field = FieldType.Ocean;
+      runAiTurn(game, ai);
+      assert.equal(game.getUnitAt(hq)!.type, UnitType.MilitaryBase);
+    });
+  });
+
   describe("saving up", () => {
     const build = (enemyCol: number, enemyRow: number) => {
       let city!: { q: number; r: number };
@@ -361,6 +484,19 @@ describe("simulation", () => {
     const second = playGame(config);
     assert.equal(first.winner, second.winner);
     assert.equal(first.turns, second.turns);
+    assert.deepEqual(first.hqUpgrades, second.hqUpgrades);
+    assert.deepEqual(first.firstHqUpgradeTurn, second.firstHqUpgradeTurn);
+  });
+
+  it("paired batches reuse each map seed with both starting sides and report upgrade telemetry", () => {
+    const observed: [number, boolean][] = [];
+    const result = runBatch({ games: 4, seed: 12, width: 10, height: 10, maxTurns: 30,
+      profileA: aiProfiles.normal, profileB: { ...aiProfiles.normal, hqUpgradeEnabled: false }, paired: true },
+      (_, game, side) => { observed.push([game.seed, side]); });
+    assert.deepEqual(observed, [[12, true], [12, false], [13, true], [13, false]]);
+    assert.equal(result.upgradesB, 0);
+    assert.equal(result.averageFirstUpgradeTurnB, null);
+    assert.equal(result.winsA + result.winsB + result.draws, 4);
   });
 
   it("finishes within the turn limit", () => {

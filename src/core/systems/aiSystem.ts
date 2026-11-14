@@ -4,7 +4,7 @@ import { axialDistance } from "../hexMath";
 import { FieldType, getFieldDef } from "../map/fieldTypes";
 import { MovementSystem } from "./movementSystem";
 import { CombatSystem } from "./combatSystem";
-import { Unit } from "../units/unit";
+import { Unit, fortifyHeadquarter } from "../units/unit";
 import { UnitType, UNIT_TYPES } from "../units/unitType";
 import type { Rng } from "../rng";
 
@@ -47,6 +47,15 @@ export interface AiProfile {
   retreatHpRatio: number;
   /** Nearby units hunt enemies that come close to the own headquarter. */
   defendHeadquarter: boolean;
+  hqUpgradeEnabled: boolean;
+  /** Combat troops required before spending on static defense. */
+  hqUpgradeMinArmy: number;
+  /** Money to keep available for troop purchases after fortification. */
+  hqUpgradeReserve: number;
+  /** Consider upgrading when an enemy combat unit is within this many hexes. */
+  hqUpgradeThreatDistance: number;
+  /** Maximum income turns to save instead of buying troops; 0 disables saving. */
+  hqUpgradeSavingTurns: number;
 }
 
 export const aiProfiles: Record<AiDifficulty, AiProfile> = {
@@ -59,6 +68,11 @@ export const aiProfiles: Record<AiDifficulty, AiProfile> = {
     smartPurchase: false,
     retreatHpRatio: 0.15,
     defendHeadquarter: false,
+    hqUpgradeEnabled: true,
+    hqUpgradeMinArmy: 6,
+    hqUpgradeReserve: 400,
+    hqUpgradeThreatDistance: 100,
+    hqUpgradeSavingTurns: 0,
   },
   normal: {
     incomeMultiplier: 1.5,
@@ -69,6 +83,11 @@ export const aiProfiles: Record<AiDifficulty, AiProfile> = {
     smartPurchase: true,
     retreatHpRatio: 0.3,
     defendHeadquarter: false,
+    hqUpgradeEnabled: true,
+    hqUpgradeMinArmy: 6,
+    hqUpgradeReserve: 400,
+    hqUpgradeThreatDistance: 100,
+    hqUpgradeSavingTurns: 0,
   },
   hard: {
     incomeMultiplier: 2.5,
@@ -79,6 +98,11 @@ export const aiProfiles: Record<AiDifficulty, AiProfile> = {
     smartPurchase: true,
     retreatHpRatio: 0.3,
     defendHeadquarter: true,
+    hqUpgradeEnabled: true,
+    hqUpgradeMinArmy: 6,
+    hqUpgradeReserve: 400,
+    hqUpgradeThreatDistance: 100,
+    hqUpgradeSavingTurns: 0,
   },
 };
 
@@ -110,6 +134,7 @@ export class AiSystem {
   private profile: AiProfile = aiProfiles.normal;
   // Expected damage already assigned to enemy units in the current AI turn (focus fire, no overkill).
   public purchaseHeadquarters: Axial[] = [];
+  public upgradedHeadquarters: Axial[] = [];
   private plannedDamage = new Map<Unit, number>();
   // Path cost to a target tile, cached per target because costs do not depend on the unit.
   private costFieldCache = new Map<string, Map<string, number>>();
@@ -147,12 +172,14 @@ export class AiSystem {
     ): CombatPreviewEntry[] {
     if (!this.shouldRun(state)) return [];
     this.purchaseHeadquarters = [];
+    this.upgradedHeadquarters = [];
     const combatPreviews: CombatPreviewEntry[] = [];
     const attackingUnits = new Set<Unit>();
     this.plannedDamage.clear();
     this.costFieldCache.clear();
 
-    this.purchaseUnits(state, getNeighbors, getUnitAt, canAfford, spend);
+    const savingForUpgrade = this.considerHeadquarterUpgrade(state, getNeighbors, canAfford, spend);
+    if (!savingForUpgrade) this.purchaseUnits(state, getNeighbors, getUnitAt, canAfford, spend);
 
     const hasUnoccupiedCitiesOrIndustries = this.hasUnoccupiedCityOrIndustry(state);
     const aiUnits = state.units.filter(function (unit) {
@@ -217,6 +244,44 @@ export class AiSystem {
       this.tryMove(state, unit, getNeighbors, attackingUnits);
     }
     return combatPreviews;
+  }
+
+  /** Returns true only while deliberately saving for a near-term upgrade. */
+  private considerHeadquarterUpgrade(state: GameState, getNeighbors: GetNeighbors, canAfford: CanAfford, spend: Spend): boolean {
+    if (!this.profile.hqUpgradeEnabled) return false;
+    const owner = state.currentPlayer;
+    const army = state.units.filter(u => u.owner === owner && AiSystem.COMBAT_UNIT_TYPES.includes(u.type)).length;
+    if (army < this.profile.hqUpgradeMinArmy) return false;
+    const candidates = state.units.filter(u => u.owner === owner && u.type === UnitType.MilitaryBase &&
+      u.defense < UNIT_TYPES[UnitType.MilitaryBaseFortified].defense);
+    let target: Unit | null = null;
+    let closestThreat = Number.POSITIVE_INFINITY;
+    for (const hq of candidates) {
+      for (const enemy of state.units) {
+        if (enemy.owner === owner || enemy.offense <= 0 || isHeadquarter(enemy.type)) continue;
+        const distance = axialDistance(enemy, hq);
+        if (distance > this.profile.hqUpgradeThreatDistance || distance >= closestThreat) continue;
+        // Do not buy static defenses against an enemy stranded across water.
+        const pathCost = this.getCostField(state, hq, getNeighbors).get(MovementSystem.key(enemy.q, enemy.r));
+        if (pathCost === undefined && distance > enemy.attackRange) continue;
+        target = hq;
+        closestThreat = distance;
+      }
+    }
+    if (!target) return false;
+    const cost = UNIT_TYPES[UnitType.MilitaryBaseFortified].price;
+    const budget = state.playerBalances[owner] ?? 0;
+    const required = cost + this.profile.hqUpgradeReserve;
+    if (budget < required) {
+      return this.profile.hqUpgradeSavingTurns > 0 &&
+        required - budget <= this.estimateIncome(state, owner) * this.profile.hqUpgradeSavingTurns;
+    }
+    if (!canAfford(owner, cost) || !spend(owner, cost)) return false;
+    state.units[state.units.indexOf(target)] = fortifyHeadquarter(target);
+    const position = { q: target.q, r: target.r };
+    this.upgradedHeadquarters.push(position);
+    this.purchaseHeadquarters.push(position);
+    return false;
   }
 
   private purchaseUnits(

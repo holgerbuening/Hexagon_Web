@@ -21,7 +21,7 @@ function scenario(balance = 500) {
   return { game, state, hq };
 }
 
-test("fortified HQ replaces the basic HQ in place for 400, preserving health and experience", () => {
+test("fortified HQ replaces the basic HQ in place for 250, preserving health and experience", () => {
   const { game, state, hq } = scenario();
   hq.hp = 65; hq.maxHP = 120; hq.experience = 3;
   const count = state.units.length;
@@ -31,24 +31,30 @@ test("fortified HQ replaces the basic HQ in place for 400, preserving health and
   assert.equal(fortified.defense, 200); assert.equal(fortified.hp, 65); assert.equal(fortified.maxHP, 120);
   assert.equal(fortified.experience, 3); assert.equal(fortified.owner, 0);
   assert.equal(fortified.data.spriteKey, "militarybaseFortified");
-  assert.equal(fortified.data.price, 400); assert.equal(fortified.remainingMovement, 0);
+  assert.equal(fortified.data.price, 250); assert.equal(fortified.remainingMovement, 0);
   assert.equal(state.units.length, count); assert.equal(state.units.includes(hq), false);
-  assert.equal(game.getBalance(0), 100); assert.deepEqual(state.reachableTiles, {});
+  assert.equal(game.getBalance(0), 250); assert.deepEqual(state.reachableTiles, {});
   assert.equal(game.selectHex(fortified).kind, "headquarter");
 });
 
+test("an upgrade is affordable with exactly 250 and leaves no balance", () => {
+  const { game, hq } = scenario(250);
+  assert.equal(game.beginPurchase(hq, UnitType.MilitaryBaseFortified), true);
+  assert.equal(game.getBalance(0), 0);
+});
+
 test("upgrade cannot be bought twice, with insufficient money, from another player's HQ or a stale unit", () => {
-  const { game, state, hq } = scenario(399);
+  const { game, state, hq } = scenario(249);
   assert.equal(game.beginPurchase(hq, UnitType.MilitaryBaseFortified), false);
-  assert.equal(game.getUnitAt(hq), hq); assert.equal(game.getBalance(0), 399);
-  game.addBalance(0, 601);
+  assert.equal(game.getUnitAt(hq), hq); assert.equal(game.getBalance(0), 249);
+  game.addBalance(0, 751);
   const enemy = state.units.find(u => u.owner === 1 && isHeadquarter(u.type))!;
   assert.equal(game.beginPurchase(enemy, UnitType.MilitaryBaseFortified), false);
   assert.equal(game.beginPurchase(hq, UnitType.MilitaryBaseFortified), true);
   const fortified = game.getUnitAt(hq)!;
   assert.equal(game.beginPurchase(fortified, UnitType.MilitaryBaseFortified), false);
   assert.equal(game.beginPurchase(hq, UnitType.MilitaryBaseFortified), false);
-  assert.equal(game.getBalance(0), 600);
+  assert.equal(game.getBalance(0), 750);
 });
 
 test("fortified HQ can still purchase and place ordinary troops", () => {
@@ -62,7 +68,7 @@ test("fortified HQ can still purchase and place ordinary troops", () => {
   const [q, r] = key.split(",").map(Number);
   game.selectHex({ q: q!, r: r! });
   assert.equal(game.getUnitAt({ q: q!, r: r! })?.type, UnitType.Infantry);
-  assert.equal(game.getBalance(0), 1000 - 400 - UNIT_TYPES[UnitType.Infantry].price);
+  assert.equal(game.getBalance(0), 1000 - 250 - UNIT_TYPES[UnitType.Infantry].price);
 });
 
 test("fortified HQ is supported by save games, online validation and campaign mission validation", () => {
