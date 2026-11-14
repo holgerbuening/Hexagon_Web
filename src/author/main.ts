@@ -13,7 +13,7 @@ import {
 } from "./documents";
 
 type Workspace = { version: 1; campaigns: CampaignDocument[]; campaignId: string; missionId: string | null };
-type Tool = "select" | "terrain" | "unit" | "remove" | "road";
+type Tool = "select" | "terrain" | "unit" | "remove" | "road" | "trench";
 const STORAGE_KEY = "hexagon-author-workspace-v1";
 let recoveryError = "";
 function freshWorkspace(): Workspace {
@@ -68,7 +68,7 @@ root.innerHTML = `
           <section class="panel inspector"><div class="panel-heading"><h2>Mission & story</h2></div><div id="mission-form" class="form-body"></div></section>
           <section class="map-column">
             <div class="panel map-panel"><div class="map-toolbar">
-              <label>Tool<select id="tool"><option value="select">Select</option><option value="terrain">Paint terrain</option><option value="unit">Place unit</option><option value="remove">Remove unit</option><option value="road">Toggle road</option></select></label>
+              <label>Tool<select id="tool"><option value="select">Select</option><option value="terrain">Paint terrain</option><option value="unit">Place unit</option><option value="remove">Remove unit</option><option value="road">Toggle road</option><option value="trench">Toggle trench</option></select></label>
               <label>Terrain<select id="terrain"></select></label><label>Unit<select id="unit-type"></select></label>
               <label>Side<select id="owner"><option value="0">Player</option><option value="1">AI</option></select></label>
               <button id="fit">Center map</button>
@@ -324,6 +324,10 @@ canvas.addEventListener("pointerdown", event => {
   selected = hex;
   if (tool === "terrain") change(() => { tile.field = element<HTMLSelectElement>("terrain").value as FieldType; });
   if (tool === "road") change(() => { tile.hasRoad = !tile.hasRoad; if (tile.hasRoad) tile.hasTrench = false; });
+  if (tool === "trench") {
+    if (tile.field === FieldType.Ocean && !tile.hasTrench) announce("Trenches can only be placed on land.", true);
+    else change(() => { tile.hasTrench = !tile.hasTrench; if (tile.hasTrench) tile.hasRoad = false; });
+  }
   if (tool === "remove") change(() => { m.state.units = m.state.units.filter(u => u.q !== hex.q || u.r !== hex.r); });
   if (tool === "unit") {
     if (m.state.units.some(u => u.q === hex.q && u.r === hex.r)) announce("This tile is occupied. Edit or remove the existing unit.", true);
