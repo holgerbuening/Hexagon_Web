@@ -1,3 +1,4 @@
+import { createMissionRuntime, parseMissionRuntime, DEFAULT_OBJECTIVE } from "./objectives";
 import type { SavedGameState, CombatPreviewEntry } from "../types";
 import { isPlausibleGameState } from "../../net/stateGuard";
 import { clone, parseCampaign, campaignIssues, type CampaignDocument } from "./documents";
@@ -51,8 +52,17 @@ export function parseCampaignSave(value: unknown): CampaignSave {
         p.randomDefender, p.defensePower, p.distance, p.result, p.randomDamage, p.damageDefender, p.damageAttacker].every(Number.isFinite) &&
       typeof p.defenderCanCounter === "boolean" && isPlausibleGameState({ ...save.state, units: [entry.attacker, entry.defender] });
   })) throw new Error("Invalid pending campaign combats.");
+  const runtime = save.state.mission ? parseMissionRuntime(save.state.mission) : createMissionRuntime(mission.objective ?? DEFAULT_OBJECTIVE);
+  if (!save.state.mission) {
+    runtime.completedRounds = Math.max(0, Math.floor((save.state.turn - 1) / 2) - (pendingCombats.length ? 1 : 0));
+    runtime.pendingCombats = pendingCombats.length;
+    runtime.roundPending = pendingCombats.length > 0;
+  }
+  if (JSON.stringify(runtime.objective) !== JSON.stringify(mission.objective ?? DEFAULT_OBJECTIVE) || runtime.pendingCombats !== pendingCombats.length) {
+    throw new Error("Saved mission objective or pending combats do not match the campaign.");
+  }
   return clone({ format: "hexagon-campaign-save", version: 1, campaign, missionId: mission.id,
-    completedMissionIds: [...new Set(save.completedMissionIds)], state: save.state, pendingCombats });
+    completedMissionIds: [...new Set(save.completedMissionIds)], state: { ...save.state, mission: runtime }, pendingCombats });
 }
 
 export function unlockedMissionIndex(campaign: CampaignDocument, completed: readonly string[]): number {
@@ -91,7 +101,7 @@ export function createCampaignSave(campaign: CampaignDocument, index: number, co
   const mission = campaign.missions[index];
   if (!mission) throw new Error("Mission not found.");
   return { format: "hexagon-campaign-save", version: 1, campaign: clone(campaign), missionId: mission.id,
-    completedMissionIds: [...completed], state: clone(mission.state) };
+    completedMissionIds: [...completed], state: { ...clone(mission.state), mission: createMissionRuntime(mission.objective ?? DEFAULT_OBJECTIVE) } };
 }
 
 export function finishCampaignMission(save: CampaignSave, winner: 0 | 1): number | null {

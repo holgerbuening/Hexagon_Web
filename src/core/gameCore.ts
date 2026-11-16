@@ -1,8 +1,10 @@
+import { createMissionRuntime, missionWinner } from "./campaigns/objectives";
 import { axialDistance } from "./hexMath";
 import { isHeadquarter } from "./units/unitType";
 import { parseMapDocument, type MapDocument } from "./map/mapSerializer";
 import {
   type Axial,
+  type MissionObjective,
   type EngineerBuildType,
   type EngineerActionType,
   type GameState,
@@ -100,6 +102,12 @@ export class GameCore {
     this.state = state;
     this.tileGrid = tileGrid;
     this.pendingPurchase = null;
+    if (state.mission && !state.gameOver) this.evaluateGameOver(state.currentPlayer);
+  }
+
+  public configureMissionObjective(objective: MissionObjective): void {
+    this.state.mission = createMissionRuntime(objective);
+    this.evaluateGameOver(this.state.currentPlayer);
   }
 
   // Handle click selection
@@ -169,6 +177,11 @@ export class GameCore {
   }
 
   private endTurnInternal(allowAiTurn: boolean): CombatPreviewEntry[] {
+    const finishedPlayer = this.state.currentPlayer;
+    if (this.state.mission && finishedPlayer === 1) {
+      if (this.state.mission.pendingCombats > 0) this.state.mission.roundPending = true;
+      else this.state.mission.completedRounds++;
+    }
     this.resetUnitsOfPlayer(this.state.currentPlayer);
     this.applyTurnIncome(this.state.currentPlayer);
     this.state.turn += 1;
@@ -180,6 +193,10 @@ export class GameCore {
     this.state.reachableTiles = {};
     this.state.combatOverlay = {};
     
+    if (this.state.mission) {
+      this.evaluateGameOver(finishedPlayer);
+      if (this.state.gameOver) return [];
+    }
     if (allowAiTurn && this.aiSystem.shouldRun(this.state)) {
       const previews = this.aiSystem.runTurn(
         this.state,
@@ -189,6 +206,7 @@ export class GameCore {
         (player, cost) => this.canAfford(player, cost),
         (player, cost) => this.spend(player, cost)
       );
+      if (this.state.mission) this.state.mission.pendingCombats = previews.length;
       this.endTurnInternal(false);
       return previews;
     }
@@ -314,6 +332,14 @@ export class GameCore {
     const attacker = this.getUnitAt(preview.attackerPos);
     const attackerOwner = attacker?.owner ?? this.state.currentPlayer;
     const destroyedUnits = this.combatSystem.apply(this.state, preview);
+    const mission = this.state.mission;
+    if (mission && mission.pendingCombats > 0) {
+      mission.pendingCombats--;
+      if (mission.pendingCombats === 0 && mission.roundPending) {
+        mission.completedRounds++;
+        mission.roundPending = false;
+      }
+    }
     this.evaluateGameOver(attackerOwner);
 
     // Clear selection/overlays after combat (UI/interaction belongs in GameCore)
@@ -350,6 +376,12 @@ export class GameCore {
   }
 
   private evaluateGameOver(attackerOwner: PlayerId): void {
+    if (this.state.gameOver) return;
+    if (this.state.mission) {
+      const winner = missionWinner(this.state);
+      if (winner !== null) { this.state.gameOver = true; this.state.winner = winner; }
+      return;
+    }
     const hq0Alive = this.state.units.some(
       (unit) => unit.owner === 0 && isHeadquarter(unit.type)
     );
@@ -514,6 +546,7 @@ export class GameCore {
     if (!moved) return false;
 
     selected.animationPath = path;
+    if (this.state.mission) this.evaluateGameOver(selected.owner);
 
     // English comment: After a successful move, clear overlays (same behavior as before)
     this.state.reachableTiles = {};
@@ -690,6 +723,7 @@ export class GameCore {
     this.state.reachableTiles = {};
     this.state.selectedHex = { q: pos.q, r: pos.r };
     this.state.combatOverlay = {};
+    if (this.state.mission) this.evaluateGameOver(owner);
     return true;
   }
 

@@ -131,6 +131,11 @@ export class CanvasRenderer {
     }
 
 
+    const objective = state.mission?.objective;
+    if (objective?.type === "capture-position") {
+      this.drawOverlayHex(objective.position.q, objective.position.r, "#e8bd55", "rgba(232,189,85,0.15)", 4 / this.zoom);
+    }
+
     // Combat participants are drawn last so enlarged sprites stay above other units.
     for (const unit of state.units) {
       if (!this.combatPresentation.has(unit)) this.drawUnit(unit);

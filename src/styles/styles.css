@@ -805,3 +805,4 @@ canvas:active {
 /* Keep the expanded main menu usable on shorter screens. */
 .start-dialog-overlay .start-dialog { box-sizing: border-box; min-height: 0; max-height: 94vh; overflow-y: auto; justify-content: flex-start; gap: 14px; padding: 28px 24px; }
 .start-dialog-overlay .start-dialog > * { flex-shrink: 0; }
+.hudObjective { white-space: pre-line; max-width: 270px; margin-top: 8px; padding-top: 8px; border-top: 1px solid #aaa54f; color: #eee5b5; font-size: 12px; line-height: 1.5; }

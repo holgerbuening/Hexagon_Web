@@ -89,6 +89,8 @@ test("pending AI fights retain their original rolled result when a campaign is s
   // Use the actual preview produced by the combat system.
   const preview = combat.computePreview(new GameCore(8, 8).getState(), attacker, defender, () => undefined);
   save.pendingCombats = [{ preview, attacker: Unit.serialize(attacker), defender: Unit.serialize(defender) }];
+  save.state.mission!.pendingCombats = 1;
+  save.state.mission!.roundPending = true;
   const restored = parseCampaignSave(JSON.parse(JSON.stringify(save)));
   assert.deepEqual(restored.pendingCombats, save.pendingCombats);
 });

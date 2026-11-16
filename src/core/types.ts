@@ -23,6 +23,20 @@ export interface HexTile extends Axial {
   hasTrench?: boolean;
 }
 
+export type MissionObjective =
+  | { type: "destroy-headquarters" }
+  | { type: "eliminate-all" }
+  | { type: "survive"; rounds: number }
+  | { type: "capture-all" }
+  | { type: "capture-position"; position: Axial };
+
+export interface MissionRuntime {
+  objective: MissionObjective;
+  completedRounds: number;
+  pendingCombats: number;
+  roundPending: boolean;
+}
+
 export interface GameState {
   turn: number;
   currentPlayer: PlayerId;
@@ -38,6 +52,7 @@ export interface GameState {
   playerBalances: number[];
   mapWidth: number;
   mapHeight: number;
+  mission?: MissionRuntime;
 }
 
 export interface SavedUnit {
@@ -69,6 +84,7 @@ export interface SavedGameState {
   playerBalances: number[];
   mapWidth: number;
   mapHeight: number;
+  mission?: MissionRuntime;
 }
 
 export type CombatPreview = {

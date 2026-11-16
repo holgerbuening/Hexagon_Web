@@ -1,5 +1,6 @@
+import { parseMissionObjective, DEFAULT_OBJECTIVE } from "./objectives";
 import { isHeadquarter } from "../units/unitType";
-import type { SavedGameState, SavedUnit } from "../types";
+import type { SavedGameState, SavedUnit, MissionObjective } from "../types";
 import { Unit } from "../units/unit";
 import { UnitType, UNIT_TYPES } from "../units/unitType";
 import { MapEditor } from "../map/mapEditor";
@@ -17,6 +18,7 @@ export interface MissionDocument {
   victoryText: string;
   defeatText: string;
   difficulty: AiDifficulty;
+  objective?: MissionObjective;
   state: SavedGameState;
 }
 
@@ -117,7 +119,8 @@ export function parseMission(value: unknown): MissionDocument {
   if (m.difficulty !== "easy" && m.difficulty !== "normal" && m.difficulty !== "hard") throw new Error("Unknown AI difficulty.");
   return { format: "hexagon-mission", version: 1, id: id(m.id), title: text(m.title, "Title", 200),
     briefing: text(m.briefing, "Briefing"), image: image(m.image), victoryText: text(m.victoryText, "Victory text"),
-    defeatText: text(m.defeatText, "Defeat text"), difficulty: m.difficulty, state: parseMissionState(m.state) };
+    defeatText: text(m.defeatText, "Defeat text"), difficulty: m.difficulty, state: parseMissionState(m.state),
+    ...(m.objective !== undefined ? { objective: parseMissionObjective(m.objective) } : {}) };
 }
 
 export function parseCampaign(value: unknown): CampaignDocument {
@@ -134,10 +137,19 @@ export function missionIssues(mission: MissionDocument): string[] {
   const issues: string[] = [];
   try { parseMission(mission); } catch (error) { return [error instanceof Error ? error.message : String(error)]; }
   if (!mission.title.trim()) issues.push("A mission title is required.");
-  for (const owner of [0, 1]) {
+  const objective = mission.objective ?? DEFAULT_OBJECTIVE;
+  for (const owner of objective.type === "destroy-headquarters" ? [0, 1] : [0]) {
     if (!mission.state.units.some(u => u.owner === owner && isHeadquarter(u.type))) {
       issues.push(`An HQ for ${owner === 0 ? "the player" : "the AI"} is missing.`);
     }
+  }
+  if (objective.type === "eliminate-all" && !mission.state.units.some(u => u.owner === 1)) issues.push("At least one enemy unit is required.");
+  if (objective.type === "capture-all" && !mission.state.tiles.some(t => t.field === FieldType.City || t.field === FieldType.Industry)) {
+    issues.push("This objective requires at least one city or industry.");
+  }
+  if (objective.type === "capture-position") {
+    const target = mission.state.tiles.find(t => t.q === objective.position.q && t.r === objective.position.r);
+    if (!target || target.field === FieldType.Ocean) issues.push("The capture target must be a land tile on this map.");
   }
   for (const unit of mission.state.units) {
     if (mission.state.tiles.find(t => t.q === unit.q && t.r === unit.r)?.field === FieldType.Ocean) {

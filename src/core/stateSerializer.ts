@@ -1,3 +1,4 @@
+import { parseMissionRuntime } from "./campaigns/objectives";
 import type { GameState, HexTile, SavedGameState } from "./types";
 import { Unit } from "./units/unit";
 
@@ -9,6 +10,7 @@ type DeserializedState = {
 export function serializeState(state: GameState): SavedGameState {
   return {
     version: 1,
+    ...(state.mission ? { mission: parseMissionRuntime(state.mission) } : {}),
     turn: state.turn,
     currentPlayer: state.currentPlayer,
     gameOver: state.gameOver,
@@ -34,6 +36,7 @@ export function deserializeState(saved: SavedGameState): DeserializedState {
 
   const state: GameState = {
     turn: saved.turn,
+    ...(saved.mission ? { mission: parseMissionRuntime(saved.mission) } : {}),
     currentPlayer: saved.currentPlayer,
     gameOver: saved.gameOver ?? false,
     winner: saved.winner ?? null,

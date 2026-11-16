@@ -1,3 +1,4 @@
+import { parseMissionRuntime } from "../core/campaigns/objectives";
 import { FIELD_TYPES } from "../core/map/fieldTypes";
 import { UNIT_TYPES } from "../core/units/unitType";
 
@@ -19,6 +20,9 @@ export function isPlausibleGameState(value: unknown): boolean {
     typeof side === "number" && Number.isInteger(side) && side >= 1 && side <= MAX_MAP_SIDE;
 
   if (state.version !== 1) return false;
+  if (state.mission !== undefined) {
+    try { parseMissionRuntime(state.mission); } catch { return false; }
+  }
   if (typeof state.turn !== "number" || !Number.isFinite(state.turn)) return false;
   if (state.currentPlayer !== 0 && state.currentPlayer !== 1) return false;
   if (!isSide(state.mapWidth) || !isSide(state.mapHeight)) return false;

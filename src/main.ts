@@ -1,3 +1,4 @@
+import { getMissionProgress, describeMissionObjective, DEFAULT_OBJECTIVE } from "./core/campaigns/objectives";
 import { showEngineerBuildDialog } from "./ui/engineerBuildDialog";
 import { showCampaignLibrary, showCampaignStory } from "./ui/campaignDialog";
 import { clone, type CampaignDocument } from "./core/campaigns/documents";
@@ -7,7 +8,7 @@ import { MapEditor } from "./core/map/mapEditor";
 import { type MapDocument, serializeMapDocument } from "./core/map/mapSerializer";
 import { GameCore } from "./core/gameCore";
 import { axialToPixel, pixelToAxial } from "./core/hexMath";
-import type { CombatPreview, CombatPreviewEntry, PlayerId, SelectHexResult} from "./core/types";
+import type { CombatPreview, CombatPreviewEntry, PlayerId, SelectHexResult, GameState} from "./core/types";
 import { Unit } from "./core/units/unit";
 import { FxAudioController, MovementAudioController } from "./audio/movementAudio";
 import { CanvasRenderer } from "./render/canvasRenderer";
@@ -94,6 +95,7 @@ interface OnlineGame {
 }
 let online: OnlineGame | null = null;
 let activeCampaign: CampaignSave | null = null;
+let announcedMissionState: Readonly<GameState> | null = null;
 let pendingCampaignCombats: CombatPreviewEntry[] = [];
 let campaignStorageWarning = "";
 const campaignStorage = {
@@ -496,6 +498,18 @@ function updateHud(): void {
     campaignHud.textContent = activeCampaign ? `${activeCampaign.campaign.title} · Mission ${index + 1}/${activeCampaign.campaign.missions.length}${campaignStorageWarning ? " · Progress not saved — use Save Game" : ""}` : "";
   }
 
+  let objectiveHud = document.getElementById("hudObjective");
+  if (!objectiveHud && hudOnline?.parentElement) {
+    objectiveHud = document.createElement("div"); objectiveHud.id = "hudObjective"; objectiveHud.className = "hudObjective";
+    objectiveHud.setAttribute("aria-live", "polite"); hudOnline.parentElement.append(objectiveHud);
+  }
+  if (objectiveHud) {
+    const progress = getMissionProgress(state);
+    const text = progress ? `${progress.label}\n${progress.detail}\nKeep at least one of your HQs alive.` : "";
+    if (objectiveHud.textContent !== text) objectiveHud.textContent = text;
+    objectiveHud.hidden = !progress;
+  }
+
   if (hudFlag) {
     // English comment: Update flag image based on current player id
     hudFlag.src = `/images/flags/player${state.currentPlayer}.png`;
@@ -719,6 +733,11 @@ function animationLoop(timeMs: number): void {
     renderAll();
   }
 
+  const state = game.getState();
+  if (state.mission && state.gameOver && state.winner !== null && announcedMissionState !== state &&
+      !mapEditor && !aiPlaybackActive && !combatIntroActive && !game.hasActiveUnitAnimations() && !document.querySelector(".dialog-overlay")) {
+    openWinDialog(state.winner);
+  }
   requestAnimationFrame(animationLoop);
 }
 
@@ -1444,7 +1463,7 @@ function openCampaigns(): void {
 function showMissionBriefing(campaign: CampaignDocument, index: number): void {
   if (!appRoot) return;
   const mission = campaign.missions[index]; if (!mission) return;
-  showCampaignStory(appRoot, { title: mission.title, text: mission.briefing || "Destroy the enemy headquarters to complete this mission.",
+  showCampaignStory(appRoot, { title: mission.title, text: `${mission.briefing ? mission.briefing + "\n\n" : ""}Objective: ${describeMissionObjective(mission.objective ?? DEFAULT_OBJECTIVE, mission.state.tiles)}\nDefeat: lose all your headquarters.`,
     image: mission.image, subtitle: `${campaign.title} · Mission ${index + 1} / ${campaign.missions.length} · ${{ easy: "Easy", normal: "Normal", hard: "Hard" }[mission.difficulty]}`,
     actions: [{ label: "Start mission", onClick: () => {
       const progress = readCampaignProgress(campaign, campaignStorage);
@@ -1464,8 +1483,9 @@ function resumeCampaign(save: CampaignSave): void {
   showFreshMap();
   checkpointCampaign();
   renderAll();
-  if (restored.state.gameOver && restored.state.winner !== null && restored.state.winner !== undefined) {
-    showCampaignOutcome(restored.state.winner);
+  const current = game.getState();
+  if (current.gameOver && current.winner !== null) {
+    showCampaignOutcome(current.winner);
   } else if (pendingCampaignCombats.length) {
     showAiCombatDialogs([...pendingCampaignCombats]);
   } else if (campaignStorageWarning && appRoot) {
@@ -1475,6 +1495,7 @@ function resumeCampaign(save: CampaignSave): void {
 
 function showCampaignOutcome(winner: PlayerId): void {
   if (!activeCampaign || !appRoot) return;
+  announcedMissionState = game.getState();
   const save = activeCampaign;
   const campaign = save.campaign;
   const index = campaign.missions.findIndex(m => m.id === save.missionId);
@@ -1493,6 +1514,9 @@ function showCampaignOutcome(winner: PlayerId): void {
 }
 
 function openWinDialog(winner: PlayerId): void {
+  const current = game.getState();
+  if (current.mission && announcedMissionState === current) return;
+  announcedMissionState = current;
   if (activeCampaign && !online) {
     showCampaignOutcome(winner);
     return;

@@ -35,8 +35,24 @@ Der normale Spielstart bleibt `npm run dev`.
    gewählte KI im gleichen Tab. „Zurück zum Editor“ lädt den unveränderten Entwurf.
 
 Der Mensch spielt Besitzer `0`, die KI Besitzer `1`. Der Mensch beginnt immer.
-Die bestehende Siegbedingung gilt: gegnerische HQs ausschalten.
-Mindestens ein HQ je Seite ist für den Test erforderlich. Einheiten im Wasser
+Unter **Mission objective** wird die Siegbedingung ausgewählt:
+
+- **Destroy enemy headquarters:** alle gegnerischen HQs ausschalten (Standard).
+- **Eliminate all enemy units:** alle gegnerischen Einheiten einschließlich HQs vernichten.
+- **Survive rounds:** die eingestellte Anzahl vollständiger Runden überleben.
+  Eine Runde umfasst den eigenen Zug und den anschließenden KI-Zug einschließlich aller Kämpfe.
+- **Occupy all cities and industries:** alle Städte und Industrien gleichzeitig
+  mit eigenen Einheiten besetzen.
+- **Capture a position:** ein bestimmtes Feld mit einer eigenen Einheit besetzen.
+  Das Feld auf der Karte auswählen und im Inspektor **Set as objective target**
+  anklicken. Alternativ Spalte und Zeile eingeben; beide beginnen bei 0.
+  Das Zielfeld wird auf der Karte goldfarben markiert.
+
+Der Verlust aller eigenen HQs bedeutet bei jedem Ziel eine Niederlage.
+Mindestens ein eigenes HQ ist daher erforderlich; gegnerische HQs werden nur
+beim Standardziel vorausgesetzt. Alte Missionen ohne Zielangabe behalten das
+Standardziel. Ziel und Fortschritt erscheinen im Testspiel und im Kampagnenspiel.
+Einheiten im Wasser
 werden als Fehler gemeldet. Die Prüfung ersetzt keinen Test auf Spielbalance
 oder Erreichbarkeit der gegnerischen Stellungen.
 

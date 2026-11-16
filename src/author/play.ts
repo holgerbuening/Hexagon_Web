@@ -1,3 +1,4 @@
+import { createMissionRuntime, DEFAULT_OBJECTIVE } from "../core/campaigns/objectives";
 import { parseMission, missionIssues } from "./documents";
 import { prepareGameLaunch } from "../gameLaunch";
 
@@ -8,7 +9,7 @@ async function launch(): Promise<void> {
     const mission = parseMission(JSON.parse(raw));
     const issues = missionIssues(mission);
     if (issues.length) throw new Error(issues.join("\n"));
-    prepareGameLaunch({ state: mission.state, difficulty: mission.difficulty });
+    prepareGameLaunch({ state: { ...mission.state, mission: createMissionRuntime(mission.objective ?? DEFAULT_OBJECTIVE) }, difficulty: mission.difficulty });
     await import("../main");
   } catch (error) {
     const app = document.getElementById("app")!;

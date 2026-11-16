@@ -33,7 +33,9 @@ Ergänze in `public/campaigns/index.json` den relativen Pfad:
 
 Für weitere Kampagnen zusätzliche Einträge in dieser Liste anlegen. Eine
 Kampagne muss alle Missionsprüfungen bestehen: eindeutige Kennungen, Titel,
-HQs für beide Seiten und keine Einheiten auf Wasser. Fehler einer Kampagne
+mindestens ein eigenes HQ und keine Einheiten auf Wasser. Beim Standardziel
+„Destroy enemy headquarters“ braucht auch die KI ein HQ. Je nach Ziel werden
+zusätzlich Zielposition, Rundenanzahl oder vorhandene Städte und Industrien geprüft. Fehler einer Kampagne
 werden in der Auswahl angezeigt, ohne andere Kampagnen auszublenden.
 
 Danach `npm run build:publish` ausführen und **dist/** veröffentlichen, damit
@@ -93,6 +95,33 @@ Der Fortschritt und der laufende Spielstand werden lokal nach Aktionen gesichert
 Missionen können erneut gespielt werden. Direkt geladene Kampagnen erscheinen
 nach dem ersten Missionsstart ebenfalls in der lokalen Kampagnenauswahl.
 Ausstehende KI-Kämpfe werden mit ihrem bereits berechneten Ergebnis mitgesichert.
+Auch das Missionsziel und sein Rundenfortschritt bleiben beim Fortsetzen erhalten.
+
+## Missionsziele
+
+Das Autorenstudio bietet neben dem bisherigen Ausschalten aller gegnerischen HQs
+vier weitere Ziele: alle gegnerischen Einheiten vernichten, eine bestimmte Zahl
+vollständiger Runden überleben, alle Städte und Industrien gleichzeitig besetzen
+oder ein bestimmtes Feld besetzen. Der Verlust aller eigenen HQs führt immer
+zur Niederlage. Eine Überlebensrunde zählt erst nach dem eigenen Zug und dem
+anschließenden KI-Zug einschließlich aller Kämpfe.
+
+Briefing und Spielanzeige nennen das Ziel; die Spielanzeige zeigt zusätzlich den
+Fortschritt. Ein Positionsziel erhält eine goldfarbene Markierung auf der Karte.
+Nach Erreichen des Ziels wird wie bisher die nächste Mission freigeschaltet.
+
+Die optionale Eigenschaft `objective` gehört zur jeweiligen Mission, zum Beispiel:
+
+```json
+"objective": { "type": "survive", "rounds": 10 }
+```
+
+Weitere Typen sind `destroy-headquarters`, `eliminate-all`, `capture-all` und
+`capture-position`. Letzterer enthält `position: { "q": 3, "r": 4 }` in axialen
+Kartenkoordinaten; am einfachsten setzt du das Feld im Editor. Dateien ohne
+`objective` verwenden weiterhin `destroy-headquarters`. Die Formatversion bleibt 1.
+
+## Spielstände sichern
 
 Über **Save Game** kannst du einen vollständigen Kampagnenspielstand als Datei
 sichern. **Load Game** stellt sowohl das laufende Spiel als auch die Zuordnung

@@ -1,3 +1,4 @@
+import { createMissionRuntime, describeMissionObjective, DEFAULT_OBJECTIVE } from "../core/campaigns/objectives";
 import { CanvasRenderer } from "../render/canvasRenderer";
 import { pixelToAxial } from "../core/hexMath";
 import { Unit } from "../core/units/unit";
@@ -5,7 +6,7 @@ import { UnitType, UNIT_TYPES } from "../core/units/unitType";
 import { FieldType } from "../core/map/fieldTypes";
 import { parseMapDocument } from "../core/map/mapSerializer";
 import { GameCore } from "../core/gameCore";
-import type { GameState, SavedUnit } from "../core/types";
+import type { GameState, SavedUnit, MissionObjective } from "../core/types";
 import {
   createCampaign, createMission, parseCampaign, parseMission, parseMissionState,
   missionIssues, campaignIssues, moveMission, clone, newId,
@@ -208,6 +209,38 @@ function refreshValidation(): void {
   if (!issues.length) { const li = document.createElement("li"); li.textContent = "File format, setup and HQs checked. Test the mission to assess its balance."; list.append(li); }
   element<HTMLButtonElement>("test").disabled = !m || missionIssues(m).length > 0;
 }
+function renderMissionObjectiveForm(parent: HTMLElement, m: MissionDocument): void {
+  const section = document.createElement("section"); section.id = "objective-form"; section.className = "objective-form";
+  const goal = m.objective ?? DEFAULT_OBJECTIVE;
+  field(section, "Mission objective", goal.type, value => {
+    if (value === "survive") m.objective = { type: "survive", rounds: 10 };
+    else if (value === "capture-position") {
+      const tile = m.state.tiles.find(t => t.field !== FieldType.Ocean) ?? m.state.tiles[0]!;
+      m.objective = { type: "capture-position", position: { q: tile.q, r: tile.r } };
+    } else m.objective = { type: value as "destroy-headquarters" | "eliminate-all" | "capture-all" };
+    render();
+  }, { choices: [["destroy-headquarters", "Destroy enemy headquarters"], ["eliminate-all", "Eliminate all enemy units"],
+    ["survive", "Survive rounds"], ["capture-all", "Occupy all cities and industries"], ["capture-position", "Capture a position"]] });
+  if (goal.type === "survive") {
+    field(section, "Full rounds to survive", goal.rounds, value => { m.objective = { type: "survive", rounds: Number(value) }; render(); }, { type: "number", min: 1, max: 10000 });
+    const hint = document.createElement("p"); hint.className = "hint"; hint.textContent = "A full round includes your turn and the AI turn, including all AI combats."; section.append(hint);
+  }
+  if (goal.type === "capture-position") {
+    const target = m.state.tiles.find(t => t.q === goal.position.q && t.r === goal.position.r);
+    const setTarget = (col: number, row: number) => {
+      const tile = m.state.tiles.find(t => t.col === col && t.row === row);
+      if (tile) m.objective = { type: "capture-position", position: { q: tile.q, r: tile.r } };
+      render();
+    };
+    field(section, "Target column (from 0)", target?.col ?? 0, value => setTarget(Number(value), target?.row ?? 0), { type: "number", min: 0, max: m.state.mapWidth - 1 });
+    field(section, "Target row (from 0)", target?.row ?? 0, value => setTarget(target?.col ?? 0, Number(value)), { type: "number", min: 0, max: m.state.mapHeight - 1 });
+    const hint = document.createElement("p"); hint.className = "hint"; hint.textContent = "Or select a land tile on the map and choose Set as objective target in the tile inspector. The target is outlined in gold."; section.append(hint);
+  }
+  const description = document.createElement("p"); description.className = "hint";
+  description.textContent = describeMissionObjective(goal, m.state.tiles); section.append(description);
+  parent.append(section);
+}
+
 function render(): void {
   refreshNavigation(); refreshValidation();
   element("mission-view").hidden = view !== "mission" || !mission();
@@ -220,7 +253,8 @@ function render(): void {
     field(form, "AI difficulty", m.difficulty, v => { m.difficulty = v as MissionDocument["difficulty"]; }, { choices: [["easy", "Easy"], ["normal", "Normal"], ["hard", "Hard"]] });
     field(form, "Starting funds · Player", m.state.playerBalances[0]!, v => { m.state.playerBalances[0] = Number(v); }, { type: "number", min: 0, max: 10000000 });
     field(form, "Starting funds · AI", m.state.playerBalances[1]!, v => { m.state.playerBalances[1] = Number(v); }, { type: "number", min: 0, max: 10000000 });
-    const hint = document.createElement("p"); hint.className = "hint"; hint.textContent = "The player controls side 1 and moves first. The AI controls side 2. Objective: destroy the enemy HQs."; form.append(hint);
+    renderMissionObjectiveForm(form, m);
+    const hint = document.createElement("p"); hint.className = "hint"; hint.textContent = "The player controls side 1 and moves first. Losing all of your HQs always ends the mission in defeat."; form.append(hint);
     imageField(form, m);
     field(form, "Briefing / backstory", m.briefing, v => { m.briefing = v; }, { multiline: true });
     field(form, "Victory text", m.victoryText, v => { m.victoryText = v; }, { multiline: true });
@@ -257,7 +291,7 @@ function renderOrder(): void {
     card.append(number, info, controls); list.append(card);
   });
   list.append(button("+ New mission", addMission));
-  const note = document.createElement("p"); note.className = "hint"; note.textContent = "The export includes all missions and embedded images in this order. Automatic mission progression in the game will be added in a later step."; list.append(note);
+  const note = document.createElement("p"); note.className = "hint"; note.textContent = "The export includes all missions and embedded images in this order. Mission objectives and their settings are included."; list.append(note);
 }
 
 const canvas = element<HTMLCanvasElement>("map");
@@ -267,7 +301,8 @@ function drawMap(): void {
   const m = mission(); if (!m || view !== "mission") return;
   const units = m.state.units.map(u => Unit.fromSaved(u));
   const state: GameState = { ...m.state, gameOver: false, winner: null, units, selectedHex: selected,
-    selectedUnit: null, reachableTiles: {}, attackOverlay: {}, combatOverlay: {} };
+    selectedUnit: null, reachableTiles: {}, attackOverlay: {}, combatOverlay: {},
+    ...(m.objective ? { mission: createMissionRuntime(m.objective) } : {}) };
   renderer.render(state);
   element("map-info").textContent = `${m.state.mapWidth} × ${m.state.mapHeight} · ${units.length} units`;
 }
@@ -291,6 +326,11 @@ function refreshSelection(): void {
   const m = mission(); const tile = selected && m?.state.tiles.find(t => t.q === selected!.q && t.r === selected!.r);
   element("selection-label").textContent = tile ? `Tile ${tile.col}, ${tile.row} · axial ${tile.q}, ${tile.r}` : "No selection";
   if (!tile || !m) { const p = document.createElement("p"); p.className = "hint"; p.textContent = "Select a tile on the map. Use the Place unit tool to add units."; container.append(p); return; }
+  if (m.objective?.type === "capture-position") {
+    container.append(button("Set as objective target", () => change(() => {
+      m.objective = { type: "capture-position", position: { q: tile.q, r: tile.r } };
+    }, true), tile.field === FieldType.Ocean));
+  }
   field(container, "Terrain", tile.field, v => { tile.field = v as FieldType; }, { choices: terrainChoices });
   field(container, "Road", tile.hasRoad ? "yes" : "no", v => { tile.hasRoad = v === "yes"; if (tile.hasRoad) tile.hasTrench = false; }, { choices: [["no", "No"], ["yes", "Yes"]] });
   const u = m.state.units.find(u => u.q === tile.q && u.r === tile.r);
