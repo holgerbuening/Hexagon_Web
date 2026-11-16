@@ -1,5 +1,6 @@
 {
   "version": 1,
   "campaigns": ["TheRoadToNorthPass/TheRoadToNorthPass.campaign.json",
-                "TheLastBroadcast/TheLastBroadcast.campaign.json"]
+                "TheLastBroadcast/TheLastBroadcast.campaign.json",
+                "TheShotAtParliament/TheShotAtParliament.campaign.json"]
 }

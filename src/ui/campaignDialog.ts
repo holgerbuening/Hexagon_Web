@@ -1,5 +1,6 @@
+import type { CampaignRepository } from "../storage/campaignRepository";
 import type { CampaignDocument } from "../core/campaigns/documents";
-import { playableCampaign, parseCampaignIndex, readSavedCampaigns, readCampaignProgress, unlockedMissionIndex, type CampaignSave, type CampaignStorage } from "../core/campaigns/runtime";
+import { playableCampaign, parseCampaignIndex, unlockedMissionIndex, type CampaignSave } from "../core/campaigns/runtime";
 
 interface StoryOptions {
   title: string;
@@ -27,7 +28,7 @@ export function showCampaignStory(root: HTMLElement, options: StoryOptions): voi
 }
 
 interface LibraryOptions {
-  storage: CampaignStorage;
+  storage: CampaignRepository;
   warning: string;
   onStart: (campaign: CampaignDocument, index: number) => void;
   onResume: (save: CampaignSave) => void;
@@ -42,10 +43,14 @@ export function showCampaignLibrary(root: HTMLElement, options: LibraryOptions):
   const status = document.createElement("p"); status.setAttribute("role", "status"); status.className = "campaign-story"; status.textContent = "Loading campaigns…";
   const list = document.createElement("div"); list.className = "campaign-list";
   const campaigns: CampaignDocument[] = [];
-  function add(campaign: CampaignDocument): void {
+  let storageError = "";
+  async function add(campaign: CampaignDocument): Promise<void> {
     if (campaigns.some(c => c.id === campaign.id)) return;
     campaigns.push(campaign);
-    const progress = readCampaignProgress(campaign, options.storage);
+    let progress;
+    try { progress = await options.storage.read(campaign); }
+    catch { progress = { completedMissionIds: [] as string[], save: null }; storageError = "Browser data could not be loaded. Use file saves until storage is available again."; }
+    if (!overlay.isConnected) return;
     const card = document.createElement("article"); card.className = "campaign-card";
     if (campaign.image) { const image = document.createElement("img"); image.src = campaign.image; image.alt = campaign.title; card.append(image); }
     const heading = document.createElement("h3"); heading.textContent = campaign.title;
@@ -73,7 +78,7 @@ export function showCampaignLibrary(root: HTMLElement, options: LibraryOptions):
       try {
         const file = input.files?.[0]; if (!file) return;
         if (file.size > 100_000_000) throw new Error("Campaign file is too large (maximum 100 MB).");
-        const campaign = playableCampaign(JSON.parse(await file.text())); add(campaign);
+        const campaign = playableCampaign(JSON.parse(await file.text())); await add(campaign);
         status.textContent = "Campaign loaded. Select a mission to begin.";
       } catch (error) { status.textContent = error instanceof Error ? error.message : String(error); }
     }); input.click();
@@ -94,12 +99,13 @@ export function showCampaignLibrary(root: HTMLElement, options: LibraryOptions):
       }));
       if (!overlay.isConnected) return;
       for (const result of results) {
-        if (result.status === "fulfilled") add(result.value);
+        if (result.status === "fulfilled") await add(result.value);
         else errors.push(String(result.reason));
       }
     } catch (error) { errors.push(String(error)); }
     if (!overlay.isConnected) return;
-    for (const saved of readSavedCampaigns(options.storage)) add(saved);
-    status.textContent = [options.warning, campaigns.length ? "Choose a mission or continue your saved campaign." : "No published campaigns yet. Load your exported campaign file below.", ...errors].filter(Boolean).join("\n");
+    try { for (const saved of await options.storage.list()) await add(saved); }
+    catch { storageError = "Browser data could not be loaded. Existing data has been retained."; }
+    status.textContent = [options.warning, storageError, campaigns.length ? "Choose a mission or continue your saved campaign." : "No published campaigns yet. Load your exported campaign file below.", ...errors].filter(Boolean).join("\n");
   })();
 }

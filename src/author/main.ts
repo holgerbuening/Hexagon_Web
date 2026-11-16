@@ -1,3 +1,4 @@
+import { browserDatabase, migrateLegacyValue } from "../storage/browserDatabase";
 import { createMissionRuntime, describeMissionObjective, DEFAULT_OBJECTIVE } from "../core/campaigns/objectives";
 import { CanvasRenderer } from "../render/canvasRenderer";
 import { pixelToAxial } from "../core/hexMath";
@@ -13,6 +14,7 @@ import {
   type CampaignDocument, type MissionDocument,
 } from "./documents";
 
+async function start(): Promise<void> {
 type Workspace = { version: 1; campaigns: CampaignDocument[]; campaignId: string; missionId: string | null };
 type Tool = "select" | "terrain" | "unit" | "remove" | "road" | "trench";
 const STORAGE_KEY = "hexagon-author-workspace-v1";
@@ -21,22 +23,30 @@ function freshWorkspace(): Workspace {
   const campaign = createCampaign();
   return { version: 1, campaigns: [campaign], campaignId: campaign.id, missionId: campaign.missions[0]!.id };
 }
-function restore(): Workspace {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return freshWorkspace();
-    const saved = JSON.parse(raw) as Workspace;
+function parseWorkspace(value: unknown): Workspace {
+    const saved = value as Workspace;
     if (saved.version !== 1 || !Array.isArray(saved.campaigns) || !saved.campaigns.length) throw new Error("Invalid workspace.");
     const campaigns = saved.campaigns.map(parseCampaign);
     if (new Set(campaigns.map(c => c.id)).size !== campaigns.length) throw new Error("Duplicate campaign IDs.");
     return { version: 1, campaigns, campaignId: campaigns.find(c => c.id === saved.campaignId)?.id ?? campaigns[0]!.id,
       missionId: saved.missionId };
+}
+async function restore(): Promise<Workspace> {
+  try {
+    const existing = await browserDatabase.get<Workspace>("author", "workspace");
+    if (existing !== undefined) {
+      const restored = parseWorkspace(existing);
+      try { await migrateLegacyValue(browserDatabase, localStorage, STORAGE_KEY, "author", "workspace", parseWorkspace); }
+      catch { /* A usable database draft must survive a broken legacy backup. */ }
+      return restored;
+    }
+    return await migrateLegacyValue(browserDatabase, localStorage, STORAGE_KEY, "author", "workspace", parseWorkspace) ?? freshWorkspace();
   } catch (error) {
     recoveryError = `The local draft could not be loaded: ${String(error)}. It will not be overwritten automatically. Export new work to a file.`;
     return freshWorkspace();
   }
 }
-let workspace = restore();
+let workspace = await restore();
 let view: "mission" | "campaign" = "mission";
 let tool: Tool = "select";
 let selected: { q: number; r: number } | null = null;
@@ -100,22 +110,46 @@ function checkpoint(): void {
   history.push(clone(workspace));
   if (history.length > 30) history.shift();
 }
-function persist(): void {
-  unsaved = true;
-  if (!storageBlocked) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(workspace));
-      unsaved = false;
-      saveMessage = `Saved locally · ${new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
-    } catch {
-      saveMessage = "Browser storage full / unavailable · please export";
-    }
-  } else saveMessage = "Autosave paused · please export";
+let saveQueue = Promise.resolve();
+let saveRevision = 0;
+let saving = false;
+let pendingWorkspace: { snapshot: Workspace; revision: number } | null = null;
+function showSaveState(): void {
   element("save-state").textContent = saveMessage;
   element("save-state").classList.toggle("error", unsaved);
+}
+function persist(): Promise<void> {
+  unsaved = true;
+  const revision = ++saveRevision;
+  saveMessage = storageBlocked ? "Autosave paused · please export" : "Saving locally…";
+  showSaveState();
   element<HTMLButtonElement>("undo").disabled = !history.length;
   refreshNavigation();
   refreshValidation();
+  if (storageBlocked) return Promise.resolve();
+  // Keep only the newest waiting draft when edits arrive during a database write.
+  pendingWorkspace = { snapshot: clone(workspace), revision };
+  if (!saving) {
+    saving = true;
+    saveQueue = (async () => {
+      while (pendingWorkspace) {
+        const next = pendingWorkspace;
+        pendingWorkspace = null;
+        try {
+          await browserDatabase.write([{ store: "author", key: "workspace", value: next.snapshot }]);
+          if (next.revision !== saveRevision) continue;
+          unsaved = false;
+          saveMessage = `Saved locally · ${new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+        } catch {
+          if (next.revision !== saveRevision) continue;
+          saveMessage = "Browser storage full / unavailable · please export";
+        }
+        showSaveState();
+      }
+      saving = false;
+    })();
+  }
+  return saveQueue;
 }
 function change(action: () => void, rerender = false): void {
   checkpoint();
@@ -478,15 +512,17 @@ element("validate").addEventListener("click", () => {
   const issues = campaignIssues(campaign());
   announce(issues.length ? issues.join("\n") : "The entire campaign passed validation. Test the missions for difficulty and reachable objectives.", issues.length > 0);
 });
-element("test").addEventListener("click", () => {
+element("test").addEventListener("click", async () => {
   const m = mission(); if (!m) return; const issues = missionIssues(m);
   if (issues.length) { announce(issues.join("\n"), true); return; }
   try {
-    sessionStorage.setItem("hexagon-author-test", JSON.stringify(parseMission(m)));
-    persist();
+    const testId = sessionStorage.getItem("hexagon-author-test-id") ?? crypto.randomUUID();
+    await browserDatabase.write([{ store: "tests", key: testId, value: parseMission(m) }]);
+    sessionStorage.setItem("hexagon-author-test-id", testId);
+    await persist();
     if (unsaved && !confirm("The browser could not save the draft. Export it before testing if possible. Continue anyway?")) return;
     window.location.href = "./play.html";
-  } catch { announce("The test mission could not be saved in the browser. Reduce image sizes or free up browser storage.", true); }
+  } catch { announce("The test mission could not be saved in the browser. Export your work and check browser storage availability.", true); }
 });
 window.addEventListener("beforeunload", event => { if (unsaved) { event.preventDefault(); event.returnValue = ""; } });
 window.addEventListener("keydown", event => {
@@ -498,3 +534,9 @@ render();
 if (recoveryError) announce(recoveryError, true);
 element("save-state").textContent = saveMessage;
 requestAnimationFrame(fitMap);
+
+}
+void start().catch(error => {
+  const root = document.getElementById("studio");
+  if (root) root.textContent = `The author studio could not be opened: ${String(error)}`;
+});

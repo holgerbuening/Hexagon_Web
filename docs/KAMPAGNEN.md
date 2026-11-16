@@ -97,6 +97,19 @@ nach dem ersten Missionsstart ebenfalls in der lokalen Kampagnenauswahl.
 Ausstehende KI-Kämpfe werden mit ihrem bereits berechneten Ergebnis mitgesichert.
 Auch das Missionsziel und sein Rundenfortschritt bleiben beim Fortsetzen erhalten.
 
+Die automatische Sicherung verwendet die eingebaute Browserdatenbank
+**IndexedDB** (`hexagon-browser`). Eine begonnene Kampagne wird mit ihren
+Missionen und Bildern einmal im Bereich `campaigns` hinterlegt. Der getrennte
+Bereich `progress` enthält nur ihre Kennung, die freigeschalteten Missionen und
+den laufenden Zustand einschließlich ausstehender Kämpfe. Bei Aktionen werden
+keine vollständigen Kampagnen mit Bildern mehr in den Spielstand kopiert.
+
+Alte Kampagnensicherungen im `localStorage` werden automatisch übernommen.
+Kampagne und Spielstand werden gemeinsam in einer Transaktion gespeichert und
+danach geprüft. Erst dann werden die alten Einträge entfernt. Bei Fehlern
+bleiben sie erhalten; ein neuerer Datenbankspielstand wird nicht durch ein
+altes Backup ersetzt. Die Umstellung benötigt keine Serverinstallation.
+
 ## Missionsziele
 
 Das Autorenstudio bietet neben dem bisherigen Ausschalten aller gegnerischen HQs
@@ -126,6 +139,8 @@ Kartenkoordinaten; am einfachsten setzt du das Feld im Editor. Dateien ohne
 Über **Save Game** kannst du einen vollständigen Kampagnenspielstand als Datei
 sichern. **Load Game** stellt sowohl das laufende Spiel als auch die Zuordnung
 zur Kampagne wieder her. Normale ältere Spielstände bleiben ladbar.
+Datei-Exporte enthalten weiterhin die vollständige Kampagne einschließlich
+eingebetteter Bilder und können unabhängig von der Browserdatenbank geladen werden.
 
 Die Browsersicherung gilt nur für denselben Browser, dieselbe Adresse und
 denselben Port. Bei vollem oder gesperrtem Speicher zeigt das Spiel einen Hinweis;

@@ -77,11 +77,25 @@ Kopie mit neuer Kennung angelegt. Ungültige Dateien ersetzen keinen Entwurf.
 
 ## Speichern und Exportieren
 
-Änderungen werden im lokalen Browserspeicher unter
-`hexagon-author-workspace-v1` gesichert. Das gilt für denselben Browser,
+Änderungen werden automatisch in **IndexedDB**, der im Browser eingebauten
+Datenbank `hexagon-browser`, gesichert. Der Bereich `author` enthält den
+Arbeitsbereich einschließlich der Bilder. Damit entfällt das kleine
+`localStorage`-Limit für Entwürfe. Schnelle Änderungen werden beim Speichern
+zusammengefasst; **Saved locally** bestätigt die abgeschlossene Sicherung.
+Das gilt für denselben Browser,
 dieselbe Adresse und denselben Port. Löschen der Browserdaten löscht auch diese
 Sicherung. Ist der Speicher voll oder gesperrt, zeigt die Anwendung dies an;
 die Änderungen bleiben dann nur im Arbeitsspeicher.
+
+Vorhandene Entwürfe aus `hexagon-author-workspace-v1` werden automatisch
+übernommen. Der alte Eintrag wird erst nach erfolgreichem Schreiben und
+geprüftem Zurücklesen entfernt. Schlägt die Übernahme fehl, bleibt das Original
+erhalten und die automatische Speicherung pausiert, damit kein Entwurf
+überschrieben wird. Ein neuerer Datenbankentwurf hat Vorrang vor einem alten Backup.
+
+Auch Missionstests werden über IndexedDB übergeben. Im `sessionStorage` liegt
+dabei nur eine kleine Kennung für den jeweiligen Tab, keine Mission mit Bildern.
+Der Test eines Tabs ersetzt seine vorherige Testvorlage.
 
 - **Mission exportieren:** eigenständige `*.mission.json`-Datei.
 - **Kampagne exportieren:** eigenständige `*.campaign.json`-Datei mit allen

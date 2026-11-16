@@ -1,8 +1,9 @@
+import { campaignRepository } from "./storage/campaignRepository";
 import { getMissionProgress, describeMissionObjective, DEFAULT_OBJECTIVE } from "./core/campaigns/objectives";
 import { showEngineerBuildDialog } from "./ui/engineerBuildDialog";
 import { showCampaignLibrary, showCampaignStory } from "./ui/campaignDialog";
 import { clone, type CampaignDocument } from "./core/campaigns/documents";
-import { createCampaignSave, parseCampaignSave, readCampaignProgress, writeCampaignProgress, finishCampaignMission, type CampaignSave } from "./core/campaigns/runtime";
+import { createCampaignSave, parseCampaignSave, finishCampaignMission, type CampaignSave } from "./core/campaigns/runtime";
 import { consumeGameLaunch } from "./gameLaunch";
 import { MapEditor } from "./core/map/mapEditor";
 import { type MapDocument, serializeMapDocument } from "./core/map/mapSerializer";
@@ -98,10 +99,10 @@ let activeCampaign: CampaignSave | null = null;
 let announcedMissionState: Readonly<GameState> | null = null;
 let pendingCampaignCombats: CombatPreviewEntry[] = [];
 let campaignStorageWarning = "";
-const campaignStorage = {
-  getItem: (key: string) => localStorage.getItem(key),
-  setItem: (key: string, value: string) => localStorage.setItem(key, value),
-};
+let pendingCampaignWrites = 0;
+window.addEventListener("beforeunload", event => {
+  if (pendingCampaignWrites > 0) { event.preventDefault(); event.returnValue = ""; }
+});
 // Incremented whenever a pending connection attempt is cancelled.
 let onlineAttempt = 0;
 
@@ -1441,14 +1442,22 @@ function checkpointCampaign(): void {
   if (!activeCampaign || online) return;
   activeCampaign.state = game.serializeState();
   activeCampaign.pendingCombats = clone(pendingCampaignCombats);
-  if (!writeCampaignProgress(activeCampaign, campaignStorage)) {
+  const savingCampaign = activeCampaign;
+  pendingCampaignWrites++;
+  void campaignRepository.save(activeCampaign).then(() => {
+    if (activeCampaign !== savingCampaign) return;
+    campaignStorageWarning = "";
+    updateHud();
+  }).catch(() => {
+    if (activeCampaign !== savingCampaign) return;
     campaignStorageWarning = "Browser storage is full or unavailable. Use Save Game to keep your campaign progress in a file.";
-  } else campaignStorageWarning = "";
+    updateHud();
+  }).finally(() => { pendingCampaignWrites--; });
 }
 
 function openCampaigns(): void {
   if (!appRoot) return;
-  showCampaignLibrary(appRoot, { storage: campaignStorage, warning: campaignStorageWarning,
+  showCampaignLibrary(appRoot, { storage: campaignRepository, warning: campaignStorageWarning,
     onStart: (campaign, index) => {
       const briefing = () => showMissionBriefing(campaign, index);
       if (index === 0 && campaign.introduction) {
@@ -1465,9 +1474,11 @@ function showMissionBriefing(campaign: CampaignDocument, index: number): void {
   const mission = campaign.missions[index]; if (!mission) return;
   showCampaignStory(appRoot, { title: mission.title, text: `${mission.briefing ? mission.briefing + "\n\n" : ""}Objective: ${describeMissionObjective(mission.objective ?? DEFAULT_OBJECTIVE, mission.state.tiles)}\nDefeat: lose all your headquarters.`,
     image: mission.image, subtitle: `${campaign.title} · Mission ${index + 1} / ${campaign.missions.length} · ${{ easy: "Easy", normal: "Normal", hard: "Hard" }[mission.difficulty]}`,
-    actions: [{ label: "Start mission", onClick: () => {
-      const progress = readCampaignProgress(campaign, campaignStorage);
-      resumeCampaign(createCampaignSave(campaign, index, progress.completedMissionIds));
+    actions: [{ label: "Start mission", onClick: async () => {
+      let completed: string[] = [];
+      try { completed = (await campaignRepository.read(campaign)).completedMissionIds; }
+      catch { /* The player can still play and export a save when browser storage is unavailable. */ }
+      resumeCampaign(createCampaignSave(campaign, index, completed));
     } }, { label: "Back", onClick: openCampaigns }] });
 }
 
