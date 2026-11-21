@@ -232,13 +232,16 @@ Ackerland → Wald → Hügel → Gebirge → Wasser → Stadt → Industrie.
 Ziehen verschiebt die Ansicht; Zoom funktioniert wie im Spiel.
 **Rückgängig** oder **Strg+Z** nimmt Geländeänderungen zurück.
 
-Die Werkzeugleiste bietet einen Kartennamen, **Neu generieren**, **Karte speichern**,
+Die Werkzeugleiste bietet einen Kartennamen, **Width** und **Height** (jeweils
+5 bis 30 Felder), **Generate New Map**, **Karte speichern**,
 **Karte laden** und **Zurück zum Menü**. Karten werden als eigene JSON-Dateien
 (`hexagon-map`, Version 1) mit Größe und Gelände einschließlich Straßen gespeichert.
 Spielstände werden weiterhin separat verwaltet. Beim Laden werden vollständige,
 eindeutige Feldpositionen und gültige Geländearten geprüft; das Format unterstützt
-Breite und Höhe von jeweils 1 bis 200 Feldern. Die Generierung im Editor bleibt
-zunächst bei 20 × 20. Der Editor bearbeitet keine laufende Partie.
+Breite und Höhe von jeweils 1 bis 200 Feldern. Neue Karten werden mit der gewählten Breite und Höhe generiert; auch
+rechteckige Karten wie 10 × 20 sind möglich. Die Auswahl allein verändert die
+aktuelle Karte noch nicht. Beim Ersetzen ungespeicherter Änderungen erfolgt
+eine Rückfrage. Der Editor bearbeitet keine laufende Partie.
 
 Im Dialog **New Game** kann über **Load Map…** eine gespeicherte Editor-Karte
 gewählt werden, bevor **1 Player vs AI** oder **2 Players Online** gestartet wird.

@@ -1679,6 +1679,28 @@ function openMapEditor(): void {
   // Typing in the name must not pan the map or activate keyboard shortcuts.
   name.addEventListener("keydown", ev => ev.stopPropagation());
   toolbar.append(title, name);
+  const dimensions = document.createElement("div");
+  dimensions.className = "map-editor-dimensions";
+  const dimension = (label: string, value: number): HTMLInputElement => {
+    const wrapper = document.createElement("label");
+    wrapper.textContent = label;
+    const input = document.createElement("input");
+    input.className = "start-dialog-input";
+    input.type = "number";
+    input.min = "5";
+    input.max = "30";
+    input.step = "1";
+    input.required = true;
+    input.value = String(value);
+    input.setAttribute("aria-label", `Map ${label.toLowerCase()}`);
+    input.addEventListener("keydown", ev => ev.stopPropagation());
+    wrapper.append(input);
+    dimensions.append(wrapper);
+    return input;
+  };
+  const width = dimension("Width", mapEditor.document.width);
+  const height = dimension("Height", mapEditor.document.height);
+  toolbar.append(dimensions);
   const button = (label: string, action: () => void): HTMLButtonElement => {
     const element = document.createElement("button");
     element.type = "button";
@@ -1689,8 +1711,11 @@ function openMapEditor(): void {
     return element;
   };
   button("Generate New Map", () => {
+    if (!width.reportValidity() || !height.reportValidity()) return;
+    const nextWidth = Number(width.value);
+    const nextHeight = Number(height.value);
     confirmDiscardMap(() => {
-      mapEditor = new MapEditor();
+      mapEditor = new MapEditor(nextWidth, nextHeight);
       name.value = mapEditor.document.name;
       centerEditorMap();
       renderAll();
@@ -1703,7 +1728,10 @@ function openMapEditor(): void {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `hexagon-map-${Date.now()}.json`;
+    const filenameName = mapEditor.document.name.trim().normalize("NFC")
+      .replace(/[<>:"/\\|?*\u0000-\u001f\u007f]/g, "-")
+      .replace(/\s+/g, "-").replace(/^[.\-]+|[.\-]+$/g, "").slice(0, 80) || "unnamed";
+    link.download = `hexagon-map-${filenameName}-${Date.now()}.json`;
     document.body.append(link);
     link.click();
     link.remove();
@@ -1725,6 +1753,8 @@ function openMapEditor(): void {
         confirmDiscardMap(() => {
           mapEditor = candidate;
           name.value = candidate.document.name;
+          width.value = String(candidate.document.width);
+          height.value = String(candidate.document.height);
           centerEditorMap();
           renderAll();
         });
